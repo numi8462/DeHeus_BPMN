@@ -1,0 +1,59 @@
+{
+  "name": "client",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@azure/msal-browser": "^3.17.0",
+    "@azure/msal-react": "^2.0.19",
+    "@emailjs/browser": "^4.4.1",
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^13.5.0",
+    "axios": "^1.7.2",
+    "bootstrap": "^5.3.3",
+    "bpmn-js": "^17.8.2",
+    "bpmn-js-color-picker": "^0.7.1",
+    "bpmn-js-embedded-comments": "^0.7.0",
+    "bpmn-js-properties-panel": "^5.18.0",
+    "camunda-bpmn-js": "^4.12.0",
+    "canvg": "^4.0.2",
+    "diagram-js-minimap": "^5.1.0",
+    "emailjs-com": "^3.2.0",
+    "min-dash": "^4.2.1",
+    "pdfmake": "^0.2.10",
+    "react": "^18.3.1",
+    "react-bootstrap": "^2.10.3",
+    "react-dom": "^18.3.1",
+    "react-icons": "^5.2.1",
+    "react-router-dom": "^6.23.1",
+    "react-scripts": "5.0.1",
+    "sweetalert2": "^11.13.3",
+    "web-vitals": "^2.1.4",
+    "zeebe-bpmn-moddle": "^1.2.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "proxy": "https://57.155.19.92",
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

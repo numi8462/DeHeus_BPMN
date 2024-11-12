@@ -1,0 +1,110 @@
+/* CSS for toolbar */
+.toolbar {
+    display: inline-flex;        /* Enable flex layout */
+    flex-direction: row;  /* Arrange children in a row */
+    background-color: #F1F2F4; 
+    border: none;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    height: 40px;
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+}
+
+.toolbar div {
+    display: flex;
+}
+
+.toolbar button {
+    width: 35px;
+    height: 35px;
+    display: flex;        /* Enable flex layout */
+    justify-content: center; /* Center content horizontally */
+    align-items: center;  /* Center content vertically */
+    background: transparent; /* Transparent background */
+    border: none;         /* No border */
+    transition: background-color 0.3s ease; 
+    border-radius: 10px;
+}
+
+.toolbar button:hover {
+    background-color: #dadada;
+}
+
+.clipboard-button {
+    width: 35px !important;
+}
+
+.share-button {
+    width: 32px !important;
+}
+
+.toolbar-spacing {
+    width: 20px;
+    height: 20px;
+    display: flex;        /* Enable flex layout */
+    justify-content: center; /* Center content horizontally */
+    align-items: center;  /* Center content vertically */
+    background: transparent; /* Transparent background */
+    border: none;         /* No border */
+}
+
+.dropdownExport {
+    position: absolute;
+    top: 11rem;
+    left: 0rem;
+    width: 200px;
+    /* padding: 0px 0px; */
+    border-radius: 10px;
+    background-color: #fff;
+    z-index: 9999;
+    
+}
+
+.dropdownExport ul,
+.dropdownExport li {
+    /* margin: 0; */
+    padding: 0;
+}
+
+.dropdownExport ul {
+    list-style-type: none;
+    background-color: white;
+}
+
+.dropdownExport li {
+    padding: 5px;
+    font-size: small;
+
+}
+
+.dropdownExport li:hover {
+    background-color: #dadada;
+}
+
+.toolbar-right {
+    display: flex;
+    justify-content: space-between;
+}
+
+.toolbar-right button {
+    width: 30px;
+    height: 30px;
+    margin: 0 5px;
+}
+
+.checkIn-button {
+    width: 33px !important;
+}
+
+.publish-button {
+    width: 33px !important;
+}
+
+.delete-button {
+    fill: #be0000;
+}

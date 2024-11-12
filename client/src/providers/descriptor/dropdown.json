@@ -1,0 +1,39 @@
+{
+  "name": "Dropdown",
+  "prefix": "dropdown",
+  "uri": "http://dropdown",
+  "xml": {
+    "tagAlias": "lowerCase"
+  },
+  "associations": [],
+  "types": [
+    {
+      "name": "Dropdown",
+      "extends": [
+        "bpmn:BaseElement"
+      ],
+      "properties": [
+        {
+          "name": "endToEndProp",
+          "isAttr": true,
+          "type": "String"
+        },
+        {
+          "name": "functionProp",
+          "isAttr": true,
+          "type": "String"
+        },
+        {
+          "name": "departmentProp",
+          "isAttr": true,
+          "type": "String"
+        },
+        {
+          "name": "domainProp",
+          "isAttr": true,
+          "type": "String"
+        }
+      ]
+    }
+  ]
+}

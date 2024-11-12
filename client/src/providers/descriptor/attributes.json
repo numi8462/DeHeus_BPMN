@@ -1,0 +1,29 @@
+{
+    "name": "customAttribute",
+    "prefix": "customAttribute",
+    "uri": "http://attribute",
+    "xml": {
+      "tagAlias": "lowerCase"
+    },
+    "associations": [],
+    "types": [
+      {
+        "name": "CustomAttribute",
+        "extends": [
+          "bpmn:BaseElement"
+        ],
+        "properties": [
+          {
+            "name": "customId",
+            "isAttr": true,
+            "type": "String"
+          },
+          {
+            "name": "custom_value",
+            "isAttr": true,
+            "type": "String"
+          }
+        ]
+      }
+    ]
+  }

@@ -1,0 +1,24 @@
+{
+    "name": "Attachment",
+    "prefix": "attachment",
+    "uri": "http://attachment",
+    "xml": {
+      "tagAlias": "lowerCase"
+    },
+    "associations": [],
+    "types": [
+      {
+        "name": "attachment",
+        "extends": [
+          "bpmn:Task"
+        ],
+        "properties": [
+          {
+            "name": "attachment",
+            "isAttr": true,
+            "type": "Array"
+          }
+        ]
+      }
+    ]
+  }
