@@ -1,4 +1,6 @@
 # DeHeus_BPMNToolApp
+### 더 자세한 정보를 원하시면 문서를 참고해주시길 바랍니다.
+https://legend-waste-c00.notion.site/143d39f0dbf380fcb695fea7c6fa10e6
 
 ### Project
 - **Project Name:** BPMN Tool Application
