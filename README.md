@@ -14,6 +14,12 @@ https://legend-waste-c00.notion.site/143d39f0dbf380fcb695fea7c6fa10e6
   - Seungmin Lee
   - YoungHo Kim
 
+### Tech Stack
+- Frontend: React, BPMN.js, JavaScript
+- Backend: Node.js, Express.js, Azure SQL Database
+- Authentication: Microsoft SSO, Azure Active Directory
+- Deployment: Docker, Azure
+
 ---
 
 ## 1. Main Project Structure
