@@ -1,4 +1,4 @@
-import { useIsAuthenticated, useMsal } from "@azure/msal-react";
+import { useIsAuthenticated, useMsal } from "../config/mockAuth";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { BsClock } from "react-icons/bs";
@@ -13,9 +13,9 @@ import {
 import {
   BsChevronDown,
   BsChevronRight,
+  BsDiagram3,
   BsFillPlusCircleFill,
 } from "react-icons/bs";
-import { MdOpenInNew } from "react-icons/md";
 import { useNavigate, useParams } from "react-router-dom";
 import LeftNavBar from "./common/LeftNavBar";
 import TopBar from "./common/TopBar";
@@ -31,7 +31,6 @@ function ListSingleProject() {
   const userName = accounts[0].username;
   const [processes, setProcesses] = useState([]);
   const [expandedRows, setExpandedRows] = useState([]);
-  const [isNavVisible, setIsNavVisible] = useState(false);
   const navigate = useNavigate();
   const [options, setOptions] = useState([{ id: "", name: "<None>" }]);
   const [projectName, setProjectName] = useState([]);
@@ -113,54 +112,41 @@ function ListSingleProject() {
     const isExpanded = expandedRows.includes(item.id);
     const hasChildren = level < 2 && item.children && item.children.length > 0;
 
-    const rowClass = (level) => {
-      if (hasChildren) {
-        return level === 0 ? "table-primary" : "table-secondary";
-      }
-      return "";
-    };
-
     return (
       <React.Fragment key={item.id}>
         <tr
-          onClick={() => hasChildren && toggleRow(item.id)}
-          style={{ cursor: hasChildren ? "pointer" : "default" }}
-          className={isExpanded ? rowClass(level) : ""}
+          className={`process-row level-${level}`}
+          onClick={(event) => handleOpenClick(event, item)}
         >
-          <td style={{ paddingLeft: level * 20 + "px", width: "60%" }}>
-            <span style={{ margin: "0 5px" }}>
-              {hasChildren ? (
-                isExpanded ? (
-                  <BsChevronDown />
-                ) : (
-                  <BsChevronRight />
-                )
-              ) : (
-                <span>&nbsp;&nbsp;</span>
-              )}
-            </span>
-            {item.name}
+          <td style={{ paddingLeft: level * 20 + 16 + "px" }}>
+            <div className="process-name-cell">
+              <span
+                className="process-toggle"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  hasChildren && toggleRow(item.id);
+                }}
+                style={{ visibility: hasChildren ? "visible" : "hidden" }}
+              >
+                {isExpanded ? <BsChevronDown size={12} /> : <BsChevronRight size={12} />}
+              </span>
+              <span className="process-name-icon">
+                <BsDiagram3 size={15} />
+              </span>
+              <span className="process-name-text">{item.name}</span>
+            </div>
           </td>
           <td>
-            {item.remainingTime !== null && (
-              <BsClock
-                style={{
-                  marginLeft: "3px",
-                  marginRight: "7px",
-                  color: item.statusColor,
-                }}
-                size={19}
-              />
+            {item.status && item.status.trim() !== "" && (
+              <span className="process-status-badge">
+                <BsClock size={13} style={{ color: item.statusColor }} />
+                {item.status}
+              </span>
             )}
-            {" "}
-            {item.status}
           </td>
           <td>{item.last_update}</td>
           <td>
-            <MdOpenInNew
-              onClick={(event) => handleOpenClick(event, item)}
-              style={{ cursor: "pointer" }}
-            />
+            <BsChevronRight className="process-row-open-hint" size={14} title="Open" />
           </td>
         </tr>
         {isExpanded &&
@@ -168,10 +154,6 @@ function ListSingleProject() {
           item.children.map((child) => renderRow(child, level + 1))}
       </React.Fragment>
     );
-  };
-
-  const toggleNav = () => {
-    setIsNavVisible(!isNavVisible);
   };
 
   const [showModal, setShowModal] = useState(false);
@@ -217,11 +199,13 @@ function ListSingleProject() {
 
   return (
     <div>
-      <TopBar onLogoClick={toggleNav} userName={userName} projectId={projectId} />
-      <div className="d-flex">
-        {isNavVisible && <LeftNavBar isAdmin={userName === "vnapp.pbmn@deheus.com"} />}
-        <div style={{ flexGrow: 1 }}>
-          {userRole === 'editor' && (
+      <div className="app-shell-topbar">
+        <TopBar onLogoClick={() => navigate("/main")} userName={userName} projectId={projectId} />
+      </div>
+      <div className="d-flex app-shell-body">
+        <LeftNavBar isAdmin={userName === "vnapp.pbmn@deheus.com"} />
+        <div style={{ flexGrow: 1, marginLeft: 64 }}>
+          {(userRole === 'editor' || userRole === 'admin') && (
             <button
               onClick={handleShowModal}
               style={{
@@ -335,26 +319,16 @@ function ListSingleProject() {
               </Button>
             </Modal.Footer>
           </Modal>
-          <div className="d-flex flex-column align-items-center w-100 vh-100 bg-light text-dark overflow-auto">
+          <div className="d-flex flex-column align-items-center w-100 app-shell-content bg-light text-dark overflow-auto">
             <div className="my-4" style={{ width: "85%" }}>
               <h3 className="mb-3">{projectName}</h3>
-              <style type="text/css">
-                {`
-                  .table-primary {
-                    background-color: #b8daff;
-                  }
-                  .table-secondary {
-                    background-color: #d1ecf1;
-                  }
-                `}
-              </style>
-              <Table>
+              <Table className="process-table">
                 <thead>
                   <tr>
-                    <th>Process Name</th>
+                    <th style={{ width: "55%" }}>Process Name</th>
                     <th>Status</th>
                     <th>Last Update</th>
-                    <th></th>
+                    <th style={{ width: "40px" }}></th>
                   </tr>
                 </thead>
                 <tbody>{processes.map((item) => renderRow(item))}</tbody>

@@ -1,7 +1,23 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from 'react';
-import { useIsAuthenticated, useMsal } from "@azure/msal-react";
+import { useIsAuthenticated, useMsal } from "../config/mockAuth";
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import axios from "axios";
+
+// Pre-load critical descriptors
+import attachmentModdleDescriptor from '../providers/descriptor/attachment.json';
+import parameterModdleDescriptor from '../providers/descriptor/parameter.json';
+import dropdownDescriptor from '../providers/descriptor/dropdown';
+
+import { Form, Button, Modal } from "react-bootstrap";
+import { BsArrowBarRight } from 'react-icons/bs';
+import { navigateTo } from '../utils/navigation';
+import Swal from 'sweetalert2';
+
+// Import CSS synchronously for critical styles
+import 'diagram-js-minimap/assets/diagram-js-minimap.css';
+import '../styles/bpmn-js.css';
+import '../styles/diagram-js.css';
+import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css';
 
 // Lazy load heavy components
 const BpmnModeler = lazy(() => import('bpmn-js/lib/Modeler'));
@@ -24,9 +40,6 @@ const ReplaceModule = lazy(() => import('../features/replace'));
 const PaletteModule = lazy(() => import('../features/palette'));
 
 // Lazy load heavy utilities
-const generateImage = lazy(() => import('../utils/generateImage'));
-const generatePdf = lazy(() => import('../utils/generatePdf'));
-const Swal = lazy(() => import('sweetalert2'));
 const emailjs = lazy(() => import('@emailjs/browser'));
 
 // Lazy load components
@@ -34,21 +47,6 @@ const ErrorPage = lazy(() => import('./ErrorPage'));
 const Toolbar = lazy(() => import('../features/toolbar/toolbar'));
 const Topbar = lazy(() => import('./common/TopBar'));
 const Sidebar = lazy(() => import('../features/sidebar/Sidebar'));
-
-// Pre-load critical descriptors
-import attachmentModdleDescriptor from '../providers/descriptor/attachment.json';
-import parameterModdleDescriptor from '../providers/descriptor/parameter.json';
-import dropdownDescriptor from '../providers/descriptor/dropdown';
-
-import { Form, Button, Modal } from "react-bootstrap";
-import { BsArrowBarRight } from 'react-icons/bs';
-import { navigateTo } from '../utils/navigation';
-
-// Import CSS synchronously for critical styles
-import 'diagram-js-minimap/assets/diagram-js-minimap.css';
-import '../styles/bpmn-js.css';
-import '../styles/diagram-js.css';
-import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css';
 
 // Loading component
 const LoadingSpinner = () => (
@@ -77,16 +75,25 @@ const createModelerConfig = (container, userRole, modules, descriptors) => ({
     moddleExtensions: descriptors
 });
 
+// Thin wrapper: forces a full remount whenever the user navigates to a
+// different diagram (React Router keeps the same component instance alive
+// when only :projectId/:diagramName change, so without this key, switching
+// diagrams via the Hierarchy sidebar left all state pointing at the old one).
 function BpmnEditor() {
+    const { projectId, diagramName: routeDiagramName } = useParams();
+    return <BpmnEditorInner key={`${projectId}/${routeDiagramName}`} />;
+}
+
+function BpmnEditorInner() {
     const API_URL = process.env.REACT_APP_API_URL;
     const navigate = useNavigate();
     const location = useLocation();
     const diagramId = location.state?.itemId;
-    const { projectId, itemName } = useParams();
+    const { projectId, diagramName: routeDiagramName } = useParams();
     const fileData = location.state?.fileData;
     const container = useRef(null);
     const importFile = useRef(null);
-    
+
     // State management
     const [state, setState] = useState({
         importXML: null,
@@ -192,7 +199,7 @@ function BpmnEditor() {
 
         checkRequested: async () => {
             try {
-                const response = await axios.get('/api/diagram/checkRequested', {
+                const response = await axios.get(`${API_URL}/api/diagram/checkRequested`, {
                     params: { diagramId }
                 });
                 setState(prev => ({
@@ -221,7 +228,7 @@ function BpmnEditor() {
             ];
 
             // Load role-specific modules
-            if (userRole === 'editing') {
+            if (userRole === 'editing' || userRole === 'admin') {
                 modulePromises.push(
                     import('../providers'),
                     import('../providers')
@@ -268,7 +275,7 @@ function BpmnEditor() {
                 import('../features/popup'),
                 import('../features/replace'),
                 import('../features/palette'),
-                state.userRole === 'editing' 
+                (state.userRole === 'editing' || state.userRole === 'admin') 
                     ? import('../providers') 
                     : import('../readOnlyProviders')
             ]);
@@ -287,7 +294,7 @@ function BpmnEditor() {
             ];
 
             // Add role-specific configurations
-            if (state.userRole !== 'editing') {
+            if ((state.userRole !== 'editing' && state.userRole !== 'admin')) {
                 additionalModules.push({
                     dragging: ['value', { init: function () { } }],
                     create: ['value', {}]
@@ -354,7 +361,7 @@ function BpmnEditor() {
             if (e.key === 'Tab') e.preventDefault();
         });
 
-        if (state.userRole !== 'editing') {
+        if ((state.userRole !== 'editing' && state.userRole !== 'admin')) {
             // Read-only mode
             eventBus.on('element.dblclick', priority, () => false);
             keyboard.addListener(priority, () => false);
@@ -471,7 +478,7 @@ function BpmnEditor() {
             e.dataTransfer.dropEffect = 'copy';
         };
 
-        if (state.userRole === 'editing') {
+        if ((state.userRole === 'editing' || state.userRole === 'admin')) {
             container.addEventListener('dragover', handleDragOver, false);
             container.addEventListener('drop', handleFileSelect, false);
         }
@@ -480,7 +487,7 @@ function BpmnEditor() {
     const updatePaletteVisibility = useCallback(() => {
         const palette = document.querySelector('.djs-palette.two-column.open') || 
                       document.querySelector('.djs-palette.open');
-        if (palette && state.userRole !== 'editing') {
+        if (palette && (state.userRole !== 'editing' && state.userRole !== 'admin')) {
             palette.style.display = 'none';
         }
     }, [state.userRole]);
@@ -491,8 +498,203 @@ function BpmnEditor() {
         handleClosePublishModal: () => setModals(prev => ({ ...prev, showPublishModal: false })),
         handleShowCheckInModal: () => setModals(prev => ({ ...prev, showCheckInModal: true })),
         handleCloseCheckInModal: () => setModals(prev => ({ ...prev, showCheckInModal: false })),
-        // ... other modal handlers
+        handleShowConfirmPublishModal: () => setModals(prev => ({ ...prev, showConfirmPublishModal: true })),
+        handleCloseConfirmPublishModal: () => setModals(prev => ({ ...prev, showConfirmPublishModal: false })),
+        handleShowDeleteModal: () => setModals(prev => ({ ...prev, showDeleteModal: true })),
+        handleCloseDeleteModal: () => setModals(prev => ({ ...prev, showDeleteModal: false })),
+        handleShowCancelModal: () => setModals(prev => ({ ...prev, showCancelModal: true })),
+        handleCloseCancelModal: () => setModals(prev => ({ ...prev, showCancelModal: false })),
+        handleShowContributorsModal: () => setModals(prev => ({ ...prev, showContributorsModal: true })),
+        handleCloseContributorsModal: () => setModals(prev => ({ ...prev, showContributorsModal: false })),
     }), []);
+
+    // Toolbar action handlers
+    const handleImportClick = useCallback(() => {
+        importFile.current?.click();
+    }, []);
+
+    const handleFileChange = useCallback((e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            setState(prev => ({ ...prev, importXML: event.target.result }));
+        };
+        reader.readAsText(file);
+    }, []);
+
+    const handleZoomIn = useCallback(() => {
+        modelerInstance.current?.get('zoomScroll').stepZoom(1);
+    }, []);
+
+    const handleZoomOut = useCallback(() => {
+        modelerInstance.current?.get('zoomScroll').stepZoom(-1);
+    }, []);
+
+    const handleUndo = useCallback(() => {
+        modelerInstance.current?.get('editorActions').trigger('undo');
+    }, []);
+
+    const handleRedo = useCallback(() => {
+        modelerInstance.current?.get('editorActions').trigger('redo');
+    }, []);
+
+    const handleAlign = useCallback((type) => {
+        if (!modelerInstance.current) return;
+        const selected = modelerInstance.current.get('selection').get();
+        if (selected.length > 1) {
+            modelerInstance.current.get('alignElements').trigger(selected, type);
+        }
+    }, []);
+
+    const handleDistribute = useCallback((orientation) => {
+        if (!modelerInstance.current) return;
+        const selected = modelerInstance.current.get('selection').get();
+        if (selected.length > 2) {
+            modelerInstance.current.get('distributeElements').trigger(selected, orientation);
+        }
+    }, []);
+
+    const downloadBlob = (content, type, filename) => {
+        const blob = new Blob([content], { type });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleExportXml = useCallback(async () => {
+        if (!modelerInstance.current) return;
+        try {
+            const { xml } = await modelerInstance.current.saveXML({ format: true });
+            downloadBlob(xml, 'application/xml', `${state.diagramName}.bpmn`);
+        } catch (err) {
+            console.error('Error exporting XML:', err);
+        }
+    }, [state.diagramName]);
+
+    const handleExportSvg = useCallback(async () => {
+        if (!modelerInstance.current) return;
+        try {
+            const { svg } = await modelerInstance.current.saveSVG();
+            downloadBlob(svg, 'image/svg+xml', `${state.diagramName}.svg`);
+        } catch (err) {
+            console.error('Error exporting SVG:', err);
+        }
+    }, [state.diagramName]);
+
+    const handleExportPng = useCallback(async () => {
+        if (!modelerInstance.current) return;
+        try {
+            const { svg } = await modelerInstance.current.saveSVG();
+            const { default: generateImage } = await import('../utils/generateImage');
+            const dataUrl = await generateImage('png', svg, state.diagramName);
+            const a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = `${state.diagramName}.png`;
+            a.click();
+        } catch (err) {
+            console.error('Error exporting PNG:', err);
+        }
+    }, [state.diagramName]);
+
+    const handleExportPdf = useCallback(async () => {
+        if (!modelerInstance.current) return;
+        try {
+            const { svg } = await modelerInstance.current.saveSVG();
+            const { default: generateImage } = await import('../utils/generateImage');
+            const { default: generatePdf } = await import('../utils/generatePdf');
+            const dataUrl = await generateImage('png', svg, state.diagramName);
+            generatePdf(dataUrl, state.diagramName);
+        } catch (err) {
+            console.error('Error exporting PDF:', err);
+        }
+    }, [state.diagramName]);
+
+    const handleContributor = useCallback(() => {
+        apiCalls.fetchContributors();
+        modalHandlers.handleShowContributorsModal();
+    }, [apiCalls, modalHandlers]);
+
+    const handleCheckIn = useCallback(async () => {
+        try {
+            await axios.post(`${API_URL}/api/diagram/checkedout`, {
+                diagramId,
+                userEmail: state.userEmail
+            });
+            await apiCalls.fetchUserRole();
+        } catch (err) {
+            console.error('Error checking out diagram:', err);
+            Swal.fire({ title: 'Failed to check out diagram!', icon: 'error', confirmButtonText: 'OK' });
+        }
+    }, [API_URL, diagramId, state.userEmail, apiCalls]);
+
+    const handleShare = useCallback(async () => {
+        try {
+            await axios.post(`${API_URL}/api/diagram/requestPublish`, {
+                diagramId,
+                userEmail: state.userEmail
+            });
+            setState(prev => ({ ...prev, isRequested: true }));
+            Swal.fire({ title: 'Publish requested!', icon: 'success', confirmButtonText: 'OK' });
+        } catch (err) {
+            console.error('Error requesting publish:', err);
+            Swal.fire({ title: 'Failed to request publish!', icon: 'error', confirmButtonText: 'OK' });
+        }
+    }, [API_URL, diagramId, state.userEmail]);
+
+    const handleCancelConfirm = useCallback(async () => {
+        try {
+            await axios.post(`${API_URL}/api/diagram/cancelCheckout`, {
+                diagramId,
+                userEmail: state.userEmail
+            });
+            modalHandlers.handleCloseCancelModal();
+            navigate(`/project/${projectId}`);
+        } catch (err) {
+            console.error('Error cancelling checkout:', err);
+            Swal.fire({ title: 'Failed to cancel!', icon: 'error', confirmButtonText: 'OK' });
+        }
+    }, [API_URL, diagramId, state.userEmail, projectId, navigate, modalHandlers]);
+
+    const handleDeleteConfirm = useCallback(async () => {
+        try {
+            await axios.post(`${API_URL}/api/diagram/delete`, { diagramId });
+            modalHandlers.handleCloseDeleteModal();
+            navigate(`/project/${projectId}`);
+        } catch (err) {
+            console.error('Error deleting diagram:', err);
+            Swal.fire({ title: 'Failed to delete diagram!', icon: 'error', confirmButtonText: 'OK' });
+        }
+    }, [API_URL, diagramId, projectId, navigate, modalHandlers]);
+
+    const handlePublishConfirm = useCallback(async () => {
+        if (!modelerInstance.current) return;
+        try {
+            const { xml } = await modelerInstance.current.saveXML({ format: true });
+            await axios.post(`${API_URL}/api/diagram/publish`, { xml, diagramId, userEmail: state.userEmail });
+            modalHandlers.handleCloseConfirmPublishModal();
+            await apiCalls.checkRequested();
+            Swal.fire({ title: 'Diagram published!', icon: 'success', confirmButtonText: 'OK' });
+        } catch (err) {
+            console.error('Error publishing diagram:', err);
+            Swal.fire({ title: 'Failed to publish diagram!', icon: 'error', confirmButtonText: 'OK' });
+        }
+    }, [API_URL, diagramId, state.userEmail, modalHandlers, apiCalls]);
+
+    const handlePublishDecline = useCallback(async () => {
+        try {
+            await axios.post(`${API_URL}/api/diagram/publish/decline`, { diagramId, userEmail: state.userEmail });
+            modalHandlers.handleCloseConfirmPublishModal();
+            await apiCalls.checkRequested();
+            Swal.fire({ title: 'Publish declined.', icon: 'info', confirmButtonText: 'OK' });
+        } catch (err) {
+            console.error('Error declining publish:', err);
+            Swal.fire({ title: 'Failed to decline publish!', icon: 'error', confirmButtonText: 'OK' });
+        }
+    }, [API_URL, diagramId, state.userEmail, modalHandlers, apiCalls]);
 
     // Effects
     useEffect(() => {
@@ -553,11 +755,36 @@ function BpmnEditor() {
                         mode={state.userRole}
                         isOpen={state.isOpen}
                         setIsOpen={(isOpen) => setState(prev => ({ ...prev, isOpen }))}
-                        // ... other props
+                        onSave={saveDiagram}
+                        onImport={handleImportClick}
+                        importFile={importFile}
+                        onFileChange={handleFileChange}
+                        onZoomIn={handleZoomIn}
+                        onZoomOut={handleZoomOut}
+                        onUndo={handleUndo}
+                        onRedo={handleRedo}
+                        onAlignLeft={() => handleAlign('left')}
+                        onAlignCenter={() => handleAlign('center')}
+                        onAlignRight={() => handleAlign('right')}
+                        onAlignTop={() => handleAlign('top')}
+                        onAlignMiddle={() => handleAlign('middle')}
+                        onAlignBottom={() => handleAlign('bottom')}
+                        onDistributeHorizontally={() => handleDistribute('horizontal')}
+                        onDistributeVertically={() => handleDistribute('vertical')}
+                        onExportXml={handleExportXml}
+                        onExportSvg={handleExportSvg}
+                        onExportPng={handleExportPng}
+                        onExportPdf={handleExportPdf}
+                        onContributor={handleContributor}
+                        onCheckIn={handleCheckIn}
+                        onShare={handleShare}
+                        onPublish={modalHandlers.handleShowConfirmPublishModal}
+                        onCancel={modalHandlers.handleShowCancelModal}
+                        onDelete={modalHandlers.handleShowDeleteModal}
                         isRequested={state.isRequested}
                     />
                 </div>
-                <div className={state.userRole === 'editing' ? 'model-body' : 'model-body disabled'}>
+                <div className={(state.userRole === 'editing' || state.userRole === 'admin') ? 'model-body' : 'model-body disabled'}>
                     {state.isHidden ? (
                         <BsArrowBarRight 
                             className='sidebar-btn hidden' 
@@ -589,10 +816,66 @@ function BpmnEditor() {
                     </div>
                 </div>
                 
-                {/* Modals would go here - keeping original modal structure but wrapped in Suspense */}
-                <Suspense fallback={null}>
-                    {/* Original modals code */}
-                </Suspense>
+                <Modal show={modals.showDeleteModal} onHide={modalHandlers.handleCloseDeleteModal} centered>
+                    <Modal.Header closeButton>
+                        <Modal.Title>Delete diagram</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body>
+                        Are you sure you want to <strong>permanently</strong> delete this diagram and all of its sub-diagrams?
+                    </Modal.Body>
+                    <Modal.Footer>
+                        <Button variant="secondary" onClick={modalHandlers.handleCloseDeleteModal}>Cancel</Button>
+                        <Button variant="danger" onClick={handleDeleteConfirm}>Delete</Button>
+                    </Modal.Footer>
+                </Modal>
+
+                <Modal show={modals.showCancelModal} onHide={modalHandlers.handleCloseCancelModal} centered>
+                    <Modal.Header closeButton>
+                        <Modal.Title>Cancel editing</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body>
+                        This will discard your current draft and release the checkout. Continue?
+                    </Modal.Body>
+                    <Modal.Footer>
+                        <Button variant="secondary" onClick={modalHandlers.handleCloseCancelModal}>Keep editing</Button>
+                        <Button variant="danger" onClick={handleCancelConfirm}>Cancel checkout</Button>
+                    </Modal.Footer>
+                </Modal>
+
+                <Modal show={modals.showContributorsModal} onHide={modalHandlers.handleCloseContributorsModal} centered>
+                    <Modal.Header closeButton>
+                        <Modal.Title>Contributors</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body>
+                        {state.currentCheckoutUser && (
+                            <p>
+                                Currently checked out by <strong>{state.currentCheckoutUser.checkoutUserName}</strong> ({state.currentCheckoutUser.remainingTime} days remaining)
+                            </p>
+                        )}
+                        {state.contributors.length > 0 ? (
+                            <ol>
+                                {state.contributors.map((c) => (
+                                    <li key={c.index}>{c.name} ({c.email})</li>
+                                ))}
+                            </ol>
+                        ) : (
+                            <p>No publish history yet.</p>
+                        )}
+                    </Modal.Body>
+                </Modal>
+
+                <Modal show={modals.showConfirmPublishModal} onHide={modalHandlers.handleCloseConfirmPublishModal} centered>
+                    <Modal.Header closeButton>
+                        <Modal.Title>Publish request</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body>
+                        This diagram has been requested for publish. Approve or decline the request.
+                    </Modal.Body>
+                    <Modal.Footer>
+                        <Button variant="secondary" onClick={handlePublishDecline}>Decline</Button>
+                        <Button variant="primary" onClick={handlePublishConfirm}>Publish</Button>
+                    </Modal.Footer>
+                </Modal>
             </div>
         </Suspense>
     );

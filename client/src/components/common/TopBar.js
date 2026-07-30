@@ -1,4 +1,4 @@
-import { useIsAuthenticated, useMsal } from "@azure/msal-react";
+import { useIsAuthenticated, useMsal } from "../../config/mockAuth";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import {
@@ -55,7 +55,7 @@ function TopBar({ onLogoClick, userName, projectId }) {
     event.stopPropagation();
 
     try {
-      const response = await axios.get(`/api/diagrams/get-diagram-with-project/${projectId}/${item.id}/${userName}`);
+      const response = await axios.get(`${API_URL}/api/diagrams/get-diagram-with-project/${projectId}/${item.id}/${userName}`);
       if (response.data.fileData) {
         const { diagramName, fileData } = response.data;
 

@@ -1,4 +1,4 @@
-import { MsalProvider, useIsAuthenticated } from "@azure/msal-react";
+import { MsalProvider, useIsAuthenticated } from "./config/mockAuth";
 import React from "react";
 import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
 import "./App.css";

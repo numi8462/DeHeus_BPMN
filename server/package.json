@@ -11,6 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "body-parser": "^1.20.2",
     "canvg": "^4.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -19,11 +20,11 @@
     "express-session": "^1.18.0",
     "jsonwebtoken": "^9.0.2",
     "jwks-rsa": "^3.1.0",
-    "mssql": "^11.0.0",
     "mysql2": "^3.11.0",
     "passport": "^0.7.0",
     "passport-azure-ad": "^4.3.5",
-    "pdfmake": "^0.2.10"
+    "pdfmake": "^0.2.10",
+    "pg": "^8.13.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"

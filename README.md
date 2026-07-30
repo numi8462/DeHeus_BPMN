@@ -93,12 +93,8 @@ For local development and Azure deployment, the following variables must be set:
 
 ### 2. Server Environment Variables
 - `/server/.env`: 
-	- **PORT**: The port on which the server will run. `443` is the standard port for HTTPS traffic in deployment.
-	- **PASSPHRASE**: The passphrase for securing private keys, if applicable (leave blank if not used).
-	- **DB_USER**: The username for the database connection.
-	- **DB_PASSWORD**: The password associated with the `DB_USER` for authentication.
-	- **DB_DATABASE**: The name of the database to be used.
-	- **DB_SERVER**: The database server address, which in Azure would typically be something like `your-database-server.database.windows.net`.
+	- **PORT**: The port on which the server will run (e.g. `3001`).
+	- **DATABASE_URL**: Postgres connection string for Supabase (use the pooler/"Transaction" connection string from the Supabase dashboard, not the direct connection, since it's needed for serverless deployments).
 
 Ensure these values are set correctly in the Azure environment or on your local machine for development.
 

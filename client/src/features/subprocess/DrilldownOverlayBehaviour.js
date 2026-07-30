@@ -13,7 +13,7 @@ import { getBusinessObject, is } from 'bpmn-js/lib/util/ModelUtil';
 import { classes, domify } from 'min-dom';
 import { getPlaneIdFromShape } from 'bpmn-js/lib/util/DrilldownUtil';
 import axios from 'axios';
-import { getLocation } from '../../utils/navigation';
+import { getLocation, navigateTo } from '../../utils/navigation';
 import Swal from 'sweetalert2';
 
 /**
@@ -216,23 +216,11 @@ DrilldownOverlayBehavior.prototype._addOverlay = function (element) {
                 if (response.data.fileData) {
                   const { diagramName, fileData } = response.data;
                   const url = `/project/${projectId}/${diagramName.replace(/ /g, '-')}`;
-                  const data = { id: res.data.data.id, url: url, userName: userName, fileData: fileData }
-                  const newWindow = window.open(url, "_blank");
-                  newWindow.addEventListener("load", () => {
-                    setTimeout(() => {
-                      newWindow.postMessage(data, window.location.origin);
-                    }, 500);
-                  });
+                  navigateTo(url, res.data.data.id, userName, fileData);
                 } else {
                   if (response.data.message && response.data.message.startsWith("available")) {
                     const url = `/project/${projectId}/${name.replace(/ /g, '-')}`;
-                    const data = { id: res.data.data.id, url: url, userName: userName }
-                    const newWindow = window.open(url, "_blank");
-                    newWindow.addEventListener("load", () => {
-                      setTimeout(() => {
-                        newWindow.postMessage(data, window.location.origin);
-                      }, 500);
-                    });
+                    navigateTo(url, res.data.data.id, userName, null);
                   } else {
                     // alert("Publishing in progress");
                     Swal.fire({
@@ -255,13 +243,7 @@ DrilldownOverlayBehavior.prototype._addOverlay = function (element) {
               })
           } else {
             const url = `/project/${projectId}/${res.data.data.name.replace(/ /g, '-')}`;
-            const newWindow = window.open(url, "_blank");
-            const data = { id: res.data.data.id, url: url, userName: userName };
-            newWindow.addEventListener("load", () => {
-              setTimeout(() => {
-                newWindow.postMessage(data, window.location.origin);
-              }, 500);
-            });
+            navigateTo(url, res.data.data.id, userName, null);
           }
         })
         .catch(err => console.error(err));

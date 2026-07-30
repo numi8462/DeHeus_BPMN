@@ -1,5 +1,4 @@
-const { MAX } = require("mssql");
-const { sql } = require("../config/dbConfig");
+const { pool } = require("../config/dbConfig");
 
 
 // check the user's role in the current diagram
@@ -11,45 +10,40 @@ const getUserRole = async (req, res) => {
             // console.log('Admin account detected:', userEmail);
             return res.status(200).json({ role: 'admin' });
         } else {
-            const request = new sql.Request();
+            const userResult = await pool.query(
+                `SELECT name
+                FROM "user"
+                WHERE email = $1;`,
+                [userEmail]
+            );
 
-            const userQuery = `
-                SELECT name 
-                FROM [user] 
-                WHERE email = @userEmail;
-            `;
-            request.input('userEmail', sql.VarChar, userEmail);
-            const userResult = await request.query(userQuery);
-
-            const userName = userResult.recordset.length > 0
-                ? userResult.recordset[0].name
+            const userName = userResult.rows.length > 0
+                ? userResult.rows[0].name
                 : 'Unknown User';
 
-            const contributionQuery = `
-                SELECT editor 
-                FROM diagram_contribution 
-                WHERE user_email = @userEmail AND project_id = @projectId;
-            `;
-            request.input('projectId', sql.Int, projectId);
-            const contributionResult = await request.query(contributionQuery);
+            const contributionResult = await pool.query(
+                `SELECT editor
+                FROM diagram_contribution
+                WHERE user_email = $1 AND project_id = $2;`,
+                [userEmail, projectId]
+            );
 
-            if (contributionResult.recordset.length > 0) {
-                const isEditor = contributionResult.recordset[0].editor;
+            if (contributionResult.rows.length > 0) {
+                const isEditor = contributionResult.rows[0].editor;
 
                 if (!isEditor) {
                     return res.status(200).json({ role: 'read-only', userName });
                 }
 
-                const diagramQuery = `
-                    SELECT checkedout_by 
-                    FROM diagram 
-                    WHERE id = @diagramId;
-                `;
-                request.input('diagramId', sql.Int, diagramId);
-                const diagramResult = await request.query(diagramQuery);
+                const diagramResult = await pool.query(
+                    `SELECT checkedout_by
+                    FROM diagram
+                    WHERE id = $1;`,
+                    [diagramId]
+                );
 
-                if (diagramResult.recordset.length > 0) {
-                    const checkedOutBy = diagramResult.recordset[0].checkedout_by;
+                if (diagramResult.rows.length > 0) {
+                    const checkedOutBy = diagramResult.rows[0].checkedout_by;
 
                     if (checkedOutBy === null) {
                         return res.status(200).json({ role: 'contributor', userName });
@@ -75,50 +69,42 @@ const getDiagramPath = async (req, res) => {
     const { diagramId, projectId } = req.query;
 
     try {
-        const projectQuery = `
-            SELECT name
+        const projectResult = await pool.query(
+            `SELECT name
             FROM project
-            WHERE id = @projectId;
-        `;
-
-        const request = new sql.Request();
-        request.input('projectId', sql.Int, projectId);
-        const projectResult = await request.query(projectQuery);
-        const projectName = projectResult.recordset.length > 0 ? projectResult.recordset[0].name : 'Unknown Project';
+            WHERE id = $1;`,
+            [projectId]
+        );
+        const projectName = projectResult.rows.length > 0 ? projectResult.rows[0].name : 'Unknown Project';
 
         let currentDiagramId = diagramId;
         let pathStack = [];
         let currentDiagramName = '';
 
         while (currentDiagramId) {
-            const diagramQuery = `
-                SELECT name 
-                FROM diagram 
-                WHERE id = @diagramId;
-            `;
-            const diagramRequest = new sql.Request();
-            diagramRequest.input('diagramId', sql.Int, currentDiagramId);
-            const diagramResult = await diagramRequest.query(diagramQuery);
+            const diagramResult = await pool.query(
+                `SELECT name
+                FROM diagram
+                WHERE id = $1;`,
+                [currentDiagramId]
+            );
 
-            if (diagramResult.recordset.length > 0) {
-                currentDiagramName = diagramResult.recordset[0].name;
+            if (diagramResult.rows.length > 0) {
+                currentDiagramName = diagramResult.rows[0].name;
                 pathStack.unshift(`[ ${currentDiagramName} ]`);
             } else {
                 break;
             }
 
-            const relationQuery = `
-                SELECT parent_diagram_id 
-                FROM diagram_relation 
-                WHERE child_diagram_id = @diagramId AND project_id = @projectId;
-            `;
-            const relationRequest = new sql.Request();
-            relationRequest.input('diagramId', sql.Int, currentDiagramId);
-            relationRequest.input('projectId', sql.Int, projectId);
-            const relationResult = await relationRequest.query(relationQuery);
+            const relationResult = await pool.query(
+                `SELECT parent_diagram_id
+                FROM diagram_relation
+                WHERE child_diagram_id = $1 AND project_id = $2;`,
+                [currentDiagramId, projectId]
+            );
 
-            if (relationResult.recordset.length > 0) {
-                currentDiagramId = relationResult.recordset[0].parent_diagram_id;
+            if (relationResult.rows.length > 0) {
+                currentDiagramId = relationResult.rows[0].parent_diagram_id;
             } else {
                 currentDiagramId = null;
             }
@@ -140,61 +126,54 @@ const getContributors = async (req, res) => {
     let index = 0;
 
     try {
-        const request = new sql.Request();
         // get published user email by date order
-        const contributorQuery = `
-            SELECT published_by 
+        const contributorResult = await pool.query(
+            `SELECT published_by
             FROM diagram_published
-            WHERE diagram_id = @diagramId
-            ORDER BY published_at;
-        `;
-        request.input('diagramId', sql.Int, diagramId);
-        const contributorResult = await request.query(contributorQuery);
+            WHERE diagram_id = $1
+            ORDER BY published_at;`,
+            [diagramId]
+        );
 
-        for (const row of contributorResult.recordset) {
+        for (const row of contributorResult.rows) {
             const userEmail = row.published_by.toLowerCase();
-            const userRequest = new sql.Request();
-            const userQuery = `
-                SELECT email, name
-                FROM [user]
-                WHERE email = @userEmailAddress;
-            `;
-            userRequest.input('userEmailAddress', sql.VarChar, userEmail);
-            const userResult = await userRequest.query(userQuery);
+            const userResult = await pool.query(
+                `SELECT email, name
+                FROM "user"
+                WHERE email = $1;`,
+                [userEmail]
+            );
 
-            if (userResult.recordset.length > 0) {
-                const { email, name } = userResult.recordset[0];
+            if (userResult.rows.length > 0) {
+                const { email, name } = userResult.rows[0];
                 index += 1;
                 contributors.push({ email, name, index });
             }
         }
-        const checkoutRequest = new sql.Request();
-        const checkoutQuery = `
-            SELECT user_email, expiry_time
+
+        const checkoutResult = await pool.query(
+            `SELECT user_email, expiry_time
             FROM diagram_checkout
-            WHERE diagram_id = @diagramId AND status = 1;
-        `;
-        checkoutRequest.input('diagramId', sql.Int, diagramId);
-        const checkoutResult = await checkoutRequest.query(checkoutQuery);
+            WHERE diagram_id = $1 AND status = true;`,
+            [diagramId]
+        );
 
         let currentCheckOut = null;
 
-        if (checkoutResult.recordset.length > 0) {
-            const { user_email, expiry_time } = checkoutResult.recordset[0];
+        if (checkoutResult.rows.length > 0) {
+            const { user_email, expiry_time } = checkoutResult.rows[0];
             const currentTime = new Date();
             const remainingTime = Math.ceil((new Date(expiry_time) - currentTime) / (1000 * 60 * 60 * 24));
 
-            const userQuery = `
-                SELECT email, name
-                FROM [user]
-                WHERE email = @userEmail;
-            `;
-            const userRequest = new sql.Request();
-            userRequest.input('userEmail', sql.VarChar, user_email);
-            const userResult = await userRequest.query(userQuery);
+            const userResult = await pool.query(
+                `SELECT email, name
+                FROM "user"
+                WHERE email = $1;`,
+                [user_email]
+            );
 
-            if (userResult.recordset.length > 0) {
-                const { email, name } = userResult.recordset[0];
+            if (userResult.rows.length > 0) {
+                const { email, name } = userResult.rows[0];
                 currentCheckOut = {
                     checkoutUserEmail: email,
                     checkoutUserName: name,
@@ -228,30 +207,32 @@ const createSubProcess = async (req, res) => {
 
         const result = await getChildDiagram(diagramId, elementId);
         if (!result) {
-            sql.query(`
-                DECLARE @NewValue INT;
-                INSERT INTO diagram (project_id, name, created_at) 
-                VALUES (${projectId}, ${"'" + processName + "'"}, GETDATE());
-                SET @NewValue = SCOPE_IDENTITY();
+            const insertResult = await pool.query(
+                `WITH new_diagram AS (
+                    INSERT INTO diagram (project_id, name, created_at)
+                    VALUES ($1, $2, NOW())
+                    RETURNING id
+                )
                 INSERT INTO diagram_relation (project_id, parent_diagram_id, parent_node_id, child_diagram_id)
-                VALUES (${projectId},  ${diagramId}, ${"'" + elementId + "'"}, @NewValue);
-                SELECT @NewValue as lastDiagramId
-            `, (err, results) => {
-                if (err) throw err;
+                SELECT $1, $3, $4, id FROM new_diagram
+                RETURNING child_diagram_id AS "lastDiagramId";`,
+                [projectId, processName, diagramId, elementId]
+            );
 
-                // Log the user activity as 'Created'
-                const lastDiagramId = results.recordset[0].lastDiagramId;
-                sql.query(`
-                    INSERT INTO user_activity_log (diagram_id, user_email, updated_time, type)
-                    VALUES (${lastDiagramId}, ${"'" + userEmail + "'"}, GETDATE(), 'Created');
-                `, (err) => {
-                    if (err) {
-                        console.error("Error logging user activity:", err);
-                    }
-                });
+            const lastDiagramId = insertResult.rows[0].lastDiagramId;
 
-                res.status(200).json({ message: "Diagram created successfully", data: { name: processName, id: results.recordset[0].lastDiagramId }, projectId: projectId });
-            });
+            // Log the user activity as 'Created'
+            try {
+                await pool.query(
+                    `INSERT INTO user_activity_log (diagram_id, user_email, updated_time, type)
+                    VALUES ($1, $2, NOW(), 'Created');`,
+                    [lastDiagramId, userEmail]
+                );
+            } catch (err) {
+                console.error("Error logging user activity:", err);
+            }
+
+            res.status(200).json({ message: "Diagram created successfully", data: { name: processName, id: lastDiagramId }, projectId: projectId });
         } else {
             if (result.name !== processName) {
                 await updateDiagramName(result.id, processName);
@@ -267,20 +248,16 @@ const createSubProcess = async (req, res) => {
 
 const getChildDiagram = async (diagramId, nodeId) => {
     try {
-        const request = new sql.Request();
-        const query = `
-            SELECT child_diagram_id as id
-            FROM diagram_relation
-            WHERE parent_diagram_id = @diagramId
-            AND
-            parent_node_id = @nodeId
-        `;
-        request.input("diagramId", diagramId);
-        request.input("nodeId", sql.VarChar, nodeId);
-        const result = await request.query(query);
-        if (result.recordset.length > 0) {
-            const subProcess = result.recordset[0];
-            return subProcess;
+        const result = await pool.query(
+            `SELECT dr.child_diagram_id as id, d.name
+            FROM diagram_relation dr
+            JOIN diagram d ON d.id = dr.child_diagram_id
+            WHERE dr.parent_diagram_id = $1
+            AND dr.parent_node_id = $2`,
+            [diagramId, nodeId]
+        );
+        if (result.rows.length > 0) {
+            return result.rows[0];
         } else {
             return null;
         }
@@ -290,11 +267,7 @@ const getChildDiagram = async (diagramId, nodeId) => {
 }
 const updateDiagramName = async (diagramId, newName) => {
     try {
-        const request = new sql.Request();
-        const query = `UPDATE diagram SET name = @newName WHERE id = @diagramId`;
-        request.input("newName", sql.VarChar, newName);
-        request.input("diagramId", diagramId);
-        await request.query(query);
+        await pool.query(`UPDATE diagram SET name = $1 WHERE id = $2`, [newName, diagramId]);
         return;
     } catch (err) {
         console.error(err);
@@ -322,34 +295,32 @@ const draftSave = async (req, res) => {
         const { xml, diagramId, userEmail } = req.body;
         const blobData = convertXMLToBlob(xml);
 
-        await sql.query`
-            MERGE INTO diagram_draft AS target
-            USING (SELECT 1 AS dummy) AS source
-            ON target.diagram_id = ${diagramId}
-            WHEN MATCHED THEN
-                UPDATE SET 
-                    file_data = ${blobData}, 
-                    created_at = GETDATE(),
-                    created_by = ${userEmail}
-            WHEN NOT MATCHED THEN
-                INSERT (diagram_id, file_data, file_type, created_by, created_at)
-                VALUES (${diagramId}, ${blobData}, 'application/bpmn+xml', ${userEmail}, GETDATE());
-        `;
+        await pool.query(
+            `INSERT INTO diagram_draft (diagram_id, file_data, file_type, created_by, created_at)
+            VALUES ($1, $2, 'application/bpmn+xml', $3, NOW())
+            ON CONFLICT (diagram_id) DO UPDATE SET
+                file_data = EXCLUDED.file_data,
+                created_at = NOW(),
+                created_by = EXCLUDED.created_by;`,
+            [diagramId, blobData, userEmail]
+        );
 
         // Log the user activity as 'Edited' only if the log not exists within the current minute
-        const existingLog = await sql.query`
-            SELECT 1 FROM user_activity_log 
-            WHERE diagram_id = ${diagramId} 
-            AND user_email = ${userEmail} 
-            AND type = 'Edited' 
-            AND DATEDIFF(MINUTE, updated_time, GETDATE()) <= 30;
-        `;
+        const existingLog = await pool.query(
+            `SELECT 1 FROM user_activity_log
+            WHERE diagram_id = $1
+            AND user_email = $2
+            AND type = 'Edited'
+            AND updated_time >= NOW() - INTERVAL '30 minutes';`,
+            [diagramId, userEmail]
+        );
 
-        if (existingLog.recordset.length === 0) {
-            await sql.query`
-                INSERT INTO user_activity_log (diagram_id, user_email, updated_time, type)
-                VALUES (${diagramId}, ${userEmail}, GETDATE(), 'Edited');
-            `;
+        if (existingLog.rows.length === 0) {
+            await pool.query(
+                `INSERT INTO user_activity_log (diagram_id, user_email, updated_time, type)
+                VALUES ($1, $2, NOW(), 'Edited');`,
+                [diagramId, userEmail]
+            );
         }
 
         res.status(200).json({ message: "Diagram draft saved successfully", diagramId: diagramId });
@@ -363,11 +334,12 @@ const draftSave = async (req, res) => {
 const requestPublish = async (req, res) => {
     const { diagramId, userEmail } = req.body;
 
-    try {    
-        await sql.query`
-            INSERT INTO user_activity_log (diagram_id, user_email, updated_time, type)
-            VALUES (${diagramId}, ${userEmail}, GETDATE(), 'Requested to publish');
-        `;
+    try {
+        await pool.query(
+            `INSERT INTO user_activity_log (diagram_id, user_email, updated_time, type)
+            VALUES ($1, $2, NOW(), 'Requested to publish');`,
+            [diagramId, userEmail]
+        );
         res.status(200).json({ message: 'Requested to publish successful' });
     } catch (error) {
         console.error('Error during requesting to publish:', error.message);
@@ -378,17 +350,18 @@ const requestPublish = async (req, res) => {
 
 const confirmPublish = async (req, res) => {
     try {
-        const { xml, diagramId } = req.body;
+        const { xml, diagramId, userEmail: requesterEmail } = req.body;
         const blobData = convertXMLToBlob(xml);
 
-        // Get user data first
-        const result = await sql.query`
-            SELECT user_email 
-            FROM diagram_checkout 
-            WHERE diagram_id = ${diagramId} 
-            AND status = 1
-        `;
-        const userEmail = result.recordset[0]?.user_email;
+        // Get user data first (falls back to the requester, e.g. an admin publishing without an active checkout)
+        const result = await pool.query(
+            `SELECT user_email
+            FROM diagram_checkout
+            WHERE diagram_id = $1
+            AND status = true`,
+            [diagramId]
+        );
+        const userEmail = result.rows[0]?.user_email || requesterEmail;
         if (!userEmail) {
             return res.status(400).json({ message: "Error: No user currently checked out this diagram" });
         }
@@ -397,45 +370,51 @@ const confirmPublish = async (req, res) => {
         const currentDate = new Date();
 
         // Insert publish data first
-        await sql.query`
-            INSERT INTO diagram_published (diagram_id, file_data, file_type, published_by, published_at)
-            VALUES (${diagramId}, ${blobData}, 'application/bpmn+xml', ${userEmail}, ${currentDate});
-        `;
+        await pool.query(
+            `INSERT INTO diagram_published (diagram_id, file_data, file_type, published_by, published_at)
+            VALUES ($1, $2, 'application/bpmn+xml', $3, $4);`,
+            [diagramId, blobData, userEmail, currentDate]
+        );
 
         // Update last_update in project table
-        const projectResult = await sql.query`
-            SELECT project_id 
-            FROM diagram 
-            WHERE id = ${diagramId}
-        `;
-        const projectId = projectResult.recordset[0]?.project_id;
+        const projectResult = await pool.query(
+            `SELECT project_id
+            FROM diagram
+            WHERE id = $1`,
+            [diagramId]
+        );
+        const projectId = projectResult.rows[0]?.project_id;
         if (projectId) {
-            await sql.query`
-                UPDATE project
-                SET last_update = ${currentDate}
-                WHERE id = ${projectId}
-            `;
+            await pool.query(
+                `UPDATE project
+                SET last_update = $1
+                WHERE id = $2`,
+                [currentDate, projectId]
+            );
         }
 
         // Automatically checkout after publishing
-        await sql.query`
-            DELETE FROM diagram_checkout
-            WHERE diagram_id = ${diagramId}
-            AND user_email = ${userEmail}
-        `;
+        await pool.query(
+            `DELETE FROM diagram_checkout
+            WHERE diagram_id = $1
+            AND user_email = $2`,
+            [diagramId, userEmail]
+        );
 
         // Automatically set checkedout_by to NULL after publishing
-        await sql.query`
-            UPDATE diagram
+        await pool.query(
+            `UPDATE diagram
             SET checkedout_by = NULL
-            WHERE id = ${diagramId}
-        `;
+            WHERE id = $1`,
+            [diagramId]
+        );
 
         // Log the user activity as 'Publish confirmed for'
-        await sql.query`
-            INSERT INTO user_activity_log (diagram_id, user_email, updated_time, type)
-            VALUES (${diagramId}, ${userEmail}, GETDATE(), 'Publish confirmed for');
-        `;
+        await pool.query(
+            `INSERT INTO user_activity_log (diagram_id, user_email, updated_time, type)
+            VALUES ($1, $2, NOW(), 'Publish confirmed for');`,
+            [diagramId, userEmail]
+        );
 
         res.status(200).json({ message: "Diagram published and checkout info updated successfully", diagramId: diagramId });
     } catch (err) {
@@ -446,22 +425,24 @@ const confirmPublish = async (req, res) => {
 
 // Log the user activity as 'Publish declined for'
 const declinePublish = async (req, res) => {
-    const { diagramId } = req.body;
+    const { diagramId, userEmail: requesterEmail } = req.body;
 
     try {
-        const result = await sql.query`
-            SELECT user_email
+        const result = await pool.query(
+            `SELECT user_email
             FROM diagram_checkout
-            WHERE diagram_id = ${diagramId} AND status = 1;
-        `;
+            WHERE diagram_id = $1 AND status = true;`,
+            [diagramId]
+        );
 
-        const userEmail = result.recordset[0]?.user_email;
+        const userEmail = result.rows[0]?.user_email || requesterEmail;
 
         if (userEmail) {
-            await sql.query`
-                INSERT INTO user_activity_log (diagram_id, user_email, updated_time, type)
-                VALUES (${diagramId}, ${userEmail}, GETDATE(), 'Publish declined for');
-            `;
+            await pool.query(
+                `INSERT INTO user_activity_log (diagram_id, user_email, updated_time, type)
+                VALUES ($1, $2, NOW(), 'Publish declined for');`,
+                [diagramId, userEmail]
+            );
             res.status(200).json({ message: 'Logging publish declined successful' });
         } else {
             res.status(404).json({ message: 'No active checkout found for the specified diagram' });
@@ -475,23 +456,25 @@ const declinePublish = async (req, res) => {
 const addDiagram = async (req, res) => {
     const { projectId, diagramName, diagramId, userEmail } = req.body;
     try {
-        const result = await sql.query(`
-            DECLARE @NewValue INT;
-            INSERT INTO diagram (project_id, name, created_at) 
-            VALUES (${projectId}, ${"'" + diagramName + "'"}, GETDATE());
-            SET @NewValue = SCOPE_IDENTITY();
+        const insertResult = await pool.query(
+            `WITH new_diagram AS (
+                INSERT INTO diagram (project_id, name, created_at)
+                VALUES ($1, $2, NOW())
+                RETURNING id
+            )
             INSERT INTO diagram_relation (project_id, parent_diagram_id, child_diagram_id)
-            VALUES (${projectId}, ${diagramId}, @NewValue);
-            
-            SELECT @NewValue AS newDiagramId;
-        `);
+            SELECT $1, $3, id FROM new_diagram
+            RETURNING child_diagram_id AS "newDiagramId";`,
+            [projectId, diagramName, diagramId]
+        );
 
         // Log the user activity as 'Created'
-        const newDiagramId = result.recordset[0].newDiagramId;
-        await sql.query`
-            INSERT INTO user_activity_log (diagram_id, user_email, updated_time, type)
-            VALUES (${newDiagramId}, ${userEmail}, GETDATE(), 'Created');
-        `;
+        const newDiagramId = insertResult.rows[0].newDiagramId;
+        await pool.query(
+            `INSERT INTO user_activity_log (diagram_id, user_email, updated_time, type)
+            VALUES ($1, $2, NOW(), 'Created');`,
+            [newDiagramId, userEmail]
+        );
         res.status(200).json({ message: "Diagram created successfully" });
     } catch (err) {
         console.error("Database error:", err);
@@ -501,27 +484,24 @@ const addDiagram = async (req, res) => {
 
 async function getLatestPublishedDiagram(projectId, diagramId) {
     try {
-        const request = new sql.Request();
-        const query = `
-            SELECT TOP 1
-    dp.file_data,
-        dp.file_type,
-        dp.published_at,
-        d.name AS diagramName
+        const result = await pool.query(
+            `SELECT
+                dp.file_data,
+                dp.file_type,
+                dp.published_at,
+                d.name AS "diagramName"
             FROM diagram_published dp
             JOIN diagram d ON dp.diagram_id = d.id
-            WHERE d.project_id = @projectId 
-              AND d.id = @diagramId
+            WHERE d.project_id = $1
+              AND d.id = $2
             ORDER BY dp.published_at DESC
-        `;
-        request.input('projectId', sql.Int, projectId);
-        request.input('diagramId', sql.Int, diagramId);
+            LIMIT 1`,
+            [projectId, diagramId]
+        );
+        // console.log("Query Result:", result.rows);
 
-        const result = await request.query(query);
-        // console.log("Query Result:", result.recordset);
-
-        if (result.recordset.length > 0) {
-            const { file_data, file_type, published_at, diagramName } = result.recordset[0];
+        if (result.rows.length > 0) {
+            const { file_data, file_type, published_at, diagramName } = result.rows[0];
             return {
                 fileData: convertBlobtoXML(file_data),
                 fileType: file_type,
@@ -541,13 +521,14 @@ async function getLatestPublishedDiagram(projectId, diagramId) {
 async function getDiagramData(req, res) {
     const { projectId, diagramId, userEmail } = req.params;
 
-    // Log the user activity as 'Viewed'
-    await sql.query`
-        INSERT INTO user_activity_log (diagram_id, user_email, updated_time, type)
-        VALUES (${diagramId}, ${userEmail}, GETDATE(), 'Viewed');
-    `;
-
     try {
+        // Log the user activity as 'Viewed'
+        await pool.query(
+            `INSERT INTO user_activity_log (diagram_id, user_email, updated_time, type)
+            VALUES ($1, $2, NOW(), 'Viewed');`,
+            [diagramId, userEmail]
+        );
+
         if (userEmail.includes('.pbmn@')) {
             const adminDraftData = await getLatestDraftDiagramForAdmin(diagramId);
             if (adminDraftData) {
@@ -557,7 +538,7 @@ async function getDiagramData(req, res) {
                 if (adminDiagramData) {
                     res.status(200).json(adminDiagramData);
                 } else {
-                    res.status(200).json(diagramId);
+                    res.status(200).json({ message: "available", id: diagramId });
                 }
             }
         } else {
@@ -586,28 +567,24 @@ async function getDiagramData(req, res) {
 
 async function getLatestDraftDiagram(diagramId, userEmail) {
     try {
-        const request = new sql.Request();
-        const query = `
-            SELECT TOP 1
-        dd.file_data,
-        dd.file_type,
-        d.name AS diagramName
+        const result = await pool.query(
+            `SELECT
+                dd.file_data,
+                dd.file_type,
+                d.name AS "diagramName"
             FROM diagram_draft dd
             JOIN diagram d ON dd.diagram_id = d.id
             JOIN diagram_checkout dc ON dd.diagram_id = dc.diagram_id
-            WHERE dc.diagram_id = @diagramId 
-              AND dc.user_email = @userEmail
-              ANd DATEDIFF(second, GETDATE(), dc.expiry_time) >= 1
-              AND status = 1;
-        `;
-        request.input('diagramId', sql.Int, diagramId);
-        request.input('userEmail', sql.VarChar(MAX), userEmail);
+            WHERE dc.diagram_id = $1
+              AND dc.user_email = $2
+              AND dc.expiry_time > NOW()
+              AND dc.status = true;`,
+            [diagramId, userEmail]
+        );
+        // console.log("Query Result:", result.rows);
 
-        const result = await request.query(query);
-        // console.log("Query Result:", result.recordset);
-
-        if (result.recordset.length > 0) {
-            const { file_data, file_type, diagramName } = result.recordset[0];
+        if (result.rows.length > 0) {
+            const { file_data, file_type, diagramName } = result.rows[0];
             return {
                 fileData: convertBlobtoXML(file_data),
                 fileType: file_type,
@@ -626,24 +603,22 @@ async function getLatestDraftDiagram(diagramId, userEmail) {
 // function for admin to view draft version for publish request
 async function getLatestDraftDiagramForAdmin(diagramId) {
     try {
-        const request = new sql.Request();
-        const query = `
-            SELECT TOP 1
+        const result = await pool.query(
+            `SELECT
                 dd.file_data,
                 dd.file_type,
-                d.name AS diagramName
+                d.name AS "diagramName"
             FROM diagram_draft dd
             JOIN diagram d ON dd.diagram_id = d.id
-            WHERE dd.diagram_id = @diagramId
-            ORDER BY dd.created_at DESC;
-        `;
-        request.input('diagramId', sql.Int, diagramId);
+            WHERE dd.diagram_id = $1
+            ORDER BY dd.created_at DESC
+            LIMIT 1;`,
+            [diagramId]
+        );
+        // console.log("Admin Query Result:", result.rows);
 
-        const result = await request.query(query);
-        // console.log("Admin Query Result:", result.recordset);
-
-        if (result.recordset.length > 0) {
-            const { file_data, file_type, diagramName } = result.recordset[0];
+        if (result.rows.length > 0) {
+            const { file_data, file_type, diagramName } = result.rows[0];
             return {
                 fileData: convertBlobtoXML(file_data),
                 fileType: file_type,
@@ -662,23 +637,19 @@ async function getLatestDraftDiagramForAdmin(diagramId) {
 
 const checkNewDiagram = async (diagramId, userEmail) => {
     try {
-        const request = new sql.Request();
-        const query = `
-            SELECT 
-        d.name AS diagramName
-            FROM diagram d 
+        const result = await pool.query(
+            `SELECT
+                d.name AS "diagramName"
+            FROM diagram d
             JOIN diagram_checkout dc ON d.id = dc.diagram_id
-            WHERE dc.diagram_id = @diagramId
-              AND user_email NOT LIKE @userEmail
-              AND status = 1;
-        `;
-        request.input('diagramId', sql.Int, diagramId);
-        request.input('userEmail', sql.VarChar, userEmail);
+            WHERE dc.diagram_id = $1
+              AND user_email NOT LIKE $2
+              AND status = true;`,
+            [diagramId, userEmail]
+        );
+        // console.log("Query Result:", result.rows);
 
-        const result = await request.query(query);
-        // console.log("Query Result:", result.recordset);
-
-        if (result.recordset.length === 0) {
+        if (result.rows.length === 0) {
             return { message: "available", id: diagramId };
         } else {
             console.log("Already checked out by someone");
@@ -709,25 +680,23 @@ const getDraftData = async (req, res) => {
     }
 }
 
-// check if diagram is publish requested 
+// check if diagram is publish requested
 const checkRequested = async (req, res) => {
     const { diagramId } = req.query;
     try {
-        const request = new sql.Request();
-        const query = `
-            SELECT TOP 1 type
+        const result = await pool.query(
+            `SELECT type
             FROM user_activity_log
-            WHERE diagram_id = @diagramId
+            WHERE diagram_id = $1
               AND type NOT IN ('Edited', 'Viewed')
               AND type IS NOT NULL
-            ORDER BY updated_time DESC;
-        `;
-        request.input('diagramId', sql.Int, diagramId);
+            ORDER BY updated_time DESC
+            LIMIT 1;`,
+            [diagramId]
+        );
+        // console.log("Query Result:", result.rows);
 
-        const result = await request.query(query);
-        // console.log("Query Result:", result.recordset);
-
-        if (result.recordset.length > 0 && result.recordset[0].type === "Requested to publish") {
+        if (result.rows.length > 0 && result.rows[0].type === "Requested to publish") {
             res.status(200).json({ requestedToPublish: true });
         } else {
             res.status(200).json({ requestedToPublish: false });
@@ -742,15 +711,14 @@ const checkRequested = async (req, res) => {
 const getAllDiagrams = async (req, res) => {
     const { projectId } = req.query;
     try {
-        const request = new sql.Request();
-        const diagramQuery = `
-            SELECT id, name 
+        const result = await pool.query(
+            `SELECT id, name
             FROM diagram
-            WHERE project_id = @projectId;
-        `;
-        request.input('projectId', sql.VarChar, projectId);
-        const result = await request.query(diagramQuery);
-        res.status(200).json({ result });
+            WHERE project_id = $1;`,
+            [projectId]
+        );
+        // preserve the { result: { recordset } } shape the frontend (TopBar.js) already expects
+        res.status(200).json({ result: { recordset: result.rows } });
     } catch (error) {
         console.error('Error fetching diagrams:', error.message);
         res.status(500).json({ message: 'Error fetching diagrams', error: error.message });
@@ -761,61 +729,43 @@ const deleteDiagram = async (req, res) => {
     const { diagramId } = req.body;
     // console.log(`Start! diagramId: ${diagramId}`);
 
-    let transaction;
+    const client = await pool.connect();
 
     try {
-        transaction = new sql.Transaction();
-        await transaction.begin();
+        await client.query('BEGIN');
 
-        const deleteDiagramAndChildren = async (diagramId, transaction) => {
-            const request = new sql.Request(transaction);
-
-            const childDiagramsQuery = `
-                SELECT child_diagram_id
+        const deleteDiagramAndChildren = async (diagramId) => {
+            const childResult = await client.query(
+                `SELECT child_diagram_id
                 FROM diagram_relation
-                WHERE parent_diagram_id = @diagramId
-            `;
-            request.input("diagramId", sql.Int, diagramId);
-            const childResult = await request.query(childDiagramsQuery);
+                WHERE parent_diagram_id = $1`,
+                [diagramId]
+            );
 
-            for (const row of childResult.recordset) {
+            for (const row of childResult.rows) {
                 // console.log(`Now deleting diagram: ${row.child_diagram_id}`);
-                await deleteDiagramAndChildren(row.child_diagram_id, transaction);
+                await deleteDiagramAndChildren(row.child_diagram_id);
             }
 
-            await transaction.request()
-                .input("diagramId", sql.Int, diagramId)
-                .query(`DELETE FROM diagram_relation WHERE child_diagram_id = @diagramId`);
-            await transaction.request()
-                .input("diagramId", sql.Int, diagramId)
-                .query(`DELETE FROM diagram_checkout WHERE diagram_id = @diagramId`);
-            await transaction.request()
-                .input("diagramId", sql.Int, diagramId)
-                .query(`DELETE FROM diagram_draft WHERE diagram_id = @diagramId`);
-            await transaction.request()
-                .input("diagramId", sql.Int, diagramId)
-                .query(`DELETE FROM diagram_published WHERE diagram_id = @diagramId`);
-            await transaction.request()
-                .input("diagramId", sql.Int, diagramId)
-                .query(`DELETE FROM node_attachment WHERE diagram_id = @diagramId`);
-            await transaction.request()
-                .input("diagramId", sql.Int, diagramId)
-                .query(`DELETE FROM diagram WHERE id = @diagramId`);
+            await client.query(`DELETE FROM diagram_relation WHERE child_diagram_id = $1`, [diagramId]);
+            await client.query(`DELETE FROM diagram_checkout WHERE diagram_id = $1`, [diagramId]);
+            await client.query(`DELETE FROM diagram_draft WHERE diagram_id = $1`, [diagramId]);
+            await client.query(`DELETE FROM diagram_published WHERE diagram_id = $1`, [diagramId]);
+            await client.query(`DELETE FROM node_attachment WHERE diagram_id = $1`, [diagramId]);
+            await client.query(`DELETE FROM diagram WHERE id = $1`, [diagramId]);
         };
 
-        await deleteDiagramAndChildren(diagramId, transaction);
+        await deleteDiagramAndChildren(diagramId);
 
-        await transaction.commit();
+        await client.query('COMMIT');
 
         res.status(200).json({ message: "Diagram and its children deleted successfully!" });
     } catch (error) {
         console.error("Error deleting diagram:", error.message);
-
-        if (transaction) {
-            await transaction.rollback();
-        }
-
+        await client.query('ROLLBACK');
         res.status(500).json({ message: "Error deleting diagram", error: error.message });
+    } finally {
+        client.release();
     }
 };
 
@@ -823,4 +773,3 @@ const deleteDiagram = async (req, res) => {
 
 
 module.exports = { getUserRole, getDiagramPath, getContributors, draftSave, requestPublish, confirmPublish, declinePublish, getDiagramData, getDraftData, createSubProcess, updateSubProcessName, addDiagram, checkRequested, getAllDiagrams, deleteDiagram };
-

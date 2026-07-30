@@ -1,4 +1,4 @@
-import { useIsAuthenticated, useMsal } from "@azure/msal-react";
+import { useIsAuthenticated, useMsal } from "../config/mockAuth";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Col, ListGroup, Row, Table } from "react-bootstrap";
@@ -80,11 +80,6 @@ function MyPage() {
     }
   }, [isAuthenticated, accounts]);
 
-  const [isNavVisible, setIsNavVisible] = useState(false);
-  const toggleNav = () => {
-    setIsNavVisible(!isNavVisible);
-  };
-
   const [sortAscending, setSortAscending] = useState(false);
 
   const sortActivities = () => {
@@ -101,12 +96,14 @@ function MyPage() {
 
   return (
     <div className="myPage">
-      <TopBar onLogoClick={toggleNav} userName={userName} />
-      <div className="d-flex">
-        {isNavVisible && <LeftNavBar />}
-        <div style={{ flexGrow: 1 }}>
-          <div className="d-flex flex-column align-items-center w-100 vh-100 bg-light text-dark">
-            <div className="mt-4" style={{ width: "85%" }}>
+      <div className="app-shell-topbar">
+        <TopBar onLogoClick={() => navigate("/main")} userName={userName} />
+      </div>
+      <div className="d-flex app-shell-body">
+        <LeftNavBar />
+        <div style={{ flexGrow: 1, marginLeft: 64 }}>
+          <div className="d-flex flex-column align-items-center w-100 app-shell-content bg-light text-dark">
+            <div className="mt-4" style={{ width: "100%", maxWidth: "1200px" }}>
               <Row style={{ height: "20vh", marginBottom: "20px" }}>
                 <Col style={{ width: "100%" }}>
                   <h5>User Information</h5>

@@ -37,6 +37,8 @@ function Toolbar({
   mode,
   isRequested,
 }) {
+  // admin gets full editing capability in addition to its own admin-only buttons below
+  const canEdit = mode === 'editing' || mode === 'admin';
 
   // for fonts
   const fonts = ['Arial', 'Courier New', 'Georgia', 'Times New Roman', 'Verdana'];
@@ -48,7 +50,7 @@ function Toolbar({
   return (
     <div className="toolbar">
       <div className="toolbar-left">
-        {isOpen && mode !== "editing" &&
+        {isOpen && !canEdit &&
           <ul className='export-options'>
             <li>
               <a id='export-xml' title='download BPMN diagram' target='_blank'
@@ -72,7 +74,7 @@ function Toolbar({
             </li>
           </ul>
         }
-        {isOpen && mode === 'editing' &&
+        {isOpen && canEdit &&
           <ul className='export-options-editing'>
             <li>
               <a id='export-xml' title='download BPMN diagram' target='_blank'
@@ -97,7 +99,7 @@ function Toolbar({
           </ul>
         }
 
-        {mode === 'editing' && (
+        {canEdit && (
           <>
             <div className='toolbar-group-file'>
               <button onClick={onImport} dangerouslySetInnerHTML={{ __html: Icons.import }} title="import" />
@@ -140,7 +142,7 @@ function Toolbar({
       </div>
 
       <div className="toolbar-right">
-        {mode === 'editing' && ( // if editing
+        {canEdit && ( // if editing
           <>
             <button onClick={onCancel} dangerouslySetInnerHTML={{ __html: Icons.cancel }} title="cancel" />
           </>
@@ -155,7 +157,7 @@ function Toolbar({
             <button onClick={onCheckIn} dangerouslySetInnerHTML={{ __html: Icons.checkIn }} className='checkIn-button' title="check in" />
           </>
         )}
-        {mode === 'editing' && ( // if editing
+        {canEdit && ( // if editing
           <>
             <button onClick={onShare} dangerouslySetInnerHTML={{ __html: Icons.share }} className='share-button' title="request" />
             <button onClick={onSave} dangerouslySetInnerHTML={{ __html: Icons.save }} className='clipboard-button' title="save" />

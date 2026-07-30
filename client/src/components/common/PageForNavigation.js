@@ -1,4 +1,4 @@
-import { useIsAuthenticated, useMsal } from "@azure/msal-react";
+import { useIsAuthenticated, useMsal } from "../../config/mockAuth";
 import axios from "axios";
 import React, { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";

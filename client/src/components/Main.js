@@ -2,13 +2,13 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Table } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
-import { useIsAuthenticated, useMsal } from "@azure/msal-react";
+import { useIsAuthenticated, useMsal } from "../config/mockAuth";
 import NoAuth from "./common/NoAuth";
 import TopBar from './common/TopBar';
 import LeftNavBar from './common/LeftNavBar';
 import { formatProjectDates } from '../utils/utils';
 import { Form, Button, Modal } from "react-bootstrap";
-import { BsFillPlusCircleFill, BsThreeDots, BsTrash } from "react-icons/bs";
+import { BsFillPlusCircleFill, BsFolder2, BsThreeDots, BsTrash } from "react-icons/bs";
 import Loading from "./common/Loading";
 import Swal from 'sweetalert2';
 
@@ -18,7 +18,6 @@ function Main() {
   const { accounts } = useMsal();
   const [userName, setUserName] = useState("");
   const [projects, setProjects] = useState([]);
-  const [isNavVisible, setIsNavVisible] = useState(false);
   const navigate = useNavigate();
 
 
@@ -38,10 +37,6 @@ function Main() {
     }
   }, [isAuthenticated, accounts]);
 
-
-  const toggleNav = () => {
-    setIsNavVisible(!isNavVisible);
-  };
 
   const handleProjectClick = (projectId) => {
     navigate(`/project/${projectId}`);
@@ -143,10 +138,12 @@ function Main() {
   return (
     <div>
       {isLoading && <Loading />}
-      <TopBar onLogoClick={toggleNav} userName={userName} />
-      <div className="d-flex">
-        {isNavVisible && <LeftNavBar isAdmin={userName === "vnapp.pbmn@deheus.com"} />}
-        <div style={{ flexGrow: 1 }}>
+      <div className="app-shell-topbar">
+        <TopBar onLogoClick={() => navigate("/main")} userName={userName} />
+      </div>
+      <div className="d-flex app-shell-body">
+        <LeftNavBar isAdmin={userName === "vnapp.pbmn@deheus.com"} />
+        <div style={{ flexGrow: 1, marginLeft: 64 }}>
           {userName == "vnapp.pbmn@deheus.com" && (
             <>
               <button
@@ -217,31 +214,47 @@ function Main() {
               </Modal.Footer>
             </Modal>
           }
-          <div className="d-flex flex-column align-items-center w-100 vh-100 bg-light text-dark overflow-auto">
-            <div className="my-4" style={{ width: "85%" }}>
+          <div className="d-flex flex-column align-items-center w-100 app-shell-content bg-light text-dark overflow-auto">
+            <div className="my-4" style={{ width: "100%", maxWidth: "1200px" }}>
               <h3 className="mb-3">Accessible Projects</h3>
-              <Table>
-                <thead>
-                  <tr>
-                    <th>Project Name</th>
-                    <th>Last Update</th>
-                    {userName === "vnapp.pbmn@deheus.com" && <th></th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {projects.map((project) => (
-                    <tr key={project.id} onClick={() => handleProjectClick(project.id)} style={{ cursor: "pointer" }}>
-                      <td>{project.name}</td>
-                      <td>{project.last_update}</td>
-                      {userName === "vnapp.pbmn@deheus.com" && <td onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedProject(project);
-                        if (project) handleShowDeleteModal();
-                      }}><BsTrash color="red" title="Delete" /></td>}
+              {projects.length === 0 ? (
+                <div className="empty-state">
+                  <BsFolder2 size={32} />
+                  <p>No projects yet.</p>
+                </div>
+              ) : (
+                <Table className="process-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: "60%" }}>Project Name</th>
+                      <th>Last Update</th>
+                      {userName === "vnapp.pbmn@deheus.com" && <th style={{ width: "40px" }}></th>}
                     </tr>
-                  ))}
-                </tbody>
-              </Table>
+                  </thead>
+                  <tbody>
+                    {projects.map((project) => (
+                      <tr key={project.id} className="process-row" onClick={() => handleProjectClick(project.id)}>
+                        <td>
+                          <div className="process-name-cell">
+                            <span className="process-name-icon"><BsFolder2 size={15} /></span>
+                            <span className="process-name-text">{project.name}</span>
+                          </div>
+                        </td>
+                        <td>{project.last_update}</td>
+                        {userName === "vnapp.pbmn@deheus.com" && (
+                          <td onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedProject(project);
+                            if (project) handleShowDeleteModal();
+                          }}>
+                            <BsTrash className="process-row-delete" title="Delete" />
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              )}
             </div>
           </div>
         </div>

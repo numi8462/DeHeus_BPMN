@@ -1,4 +1,4 @@
-import { useIsAuthenticated, useMsal } from "@azure/msal-react";
+import { useIsAuthenticated, useMsal } from "../config/mockAuth";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import {
@@ -23,11 +23,13 @@ import { convertUTCToLocal } from '../utils/utils';
 import {  BsFillPlusCircleFill } from "react-icons/bs";
 import NoAuth from "./common/NoAuth";
 import Swal from 'sweetalert2';
+import { useNavigate } from "react-router-dom";
 
 function Admin() {
   const API_URL = process.env.REACT_APP_API_URL;
   const isAuthenticated = useIsAuthenticated();
   const { accounts } = useMsal();
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [userName, setUserName] = useState([]);
   const [allProjects, setAllProjects] = useState([]);
@@ -62,11 +64,6 @@ function Admin() {
         });
     }
   }, [isAuthenticated, accounts]);
-
-  const [isNavVisible, setIsNavVisible] = useState(false);
-  const toggleNav = () => {
-    setIsNavVisible(!isNavVisible);
-  };
 
   const [showModal, setShowModal] = useState(false);
   const [tempUser, setTempUser] = useState(null);
@@ -298,10 +295,12 @@ function Admin() {
 
   return (
     <div>
-      <TopBar onLogoClick={toggleNav} userName={userName} />
-      <div className="d-flex">
-        {isNavVisible && <LeftNavBar isAdmin={isAdmin}/>}
-        <div style={{ flexGrow: 1 }}>
+      <div className="app-shell-topbar">
+        <TopBar onLogoClick={() => navigate("/main")} userName={userName} />
+      </div>
+      <div className="d-flex app-shell-body">
+        <LeftNavBar isAdmin={isAdmin}/>
+        <div style={{ flexGrow: 1, marginLeft: 64 }}>
         <button
             onClick={handleShowNewUserModal}
             style={{
@@ -315,8 +314,8 @@ function Admin() {
           >
             <BsFillPlusCircleFill size={50} style={{ color: "#2A85E2" }} />
           </button>
-          <div className="d-flex flex-column align-items-center w-100 vh-100 bg-light text-dark">
-            <div className="mt-4" style={{ width: "85%" }}>
+          <div className="d-flex flex-column align-items-center w-100 app-shell-content bg-light text-dark">
+            <div className="mt-4" style={{ width: "100%", maxWidth: "1200px" }}>
                 <h3>User Account Information</h3>
               <Table>
                 <thead>

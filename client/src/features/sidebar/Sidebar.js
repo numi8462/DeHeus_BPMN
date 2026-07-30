@@ -1,10 +1,10 @@
 import axios from "axios";
 import React, { useEffect, useState } from "react";
-import { Table } from "react-bootstrap";
 import {
     BsArrowBarLeft,
     BsChevronDown,
-    BsChevronUp
+    BsChevronRight,
+    BsDiagram3
 } from "react-icons/bs";
 import { useNavigate, useParams } from "react-router-dom";
 import Swal from 'sweetalert2';
@@ -96,38 +96,31 @@ export default function Sidebar(props) {
     const renderRow = (process, level = 0) => {
         const isExpanded = expandedRows.includes(process.id);
         const hasChildren = process.children && process.children.length > 0;
+        const isActive = process.id == diagramId;
         return (
             <React.Fragment key={process.id}>
-                <tr>
-                    <td className="process-list-item" style={{
-                        paddingLeft: (level + 1) * 5 + "px",
-                        backgroundColor: process.id == diagramId ? "rgb(211, 224, 234)" : "white",
-                        display: "flex", justifyContent: "space-between", cursor: "pointer", width: "100%"
-                    }}
+                <div
+                    className={`hierarchy-row${isActive ? ' active' : ''}`}
+                    style={{ paddingLeft: 8 + level * 16 + "px" }}
+                    onClick={() => handleOpenClick(process.id, process.name)}
+                    title={process.name}
+                >
+                    <span
+                        className="hierarchy-row-toggle"
                         onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenClick(process.id, process.name);
-                        }}
-                    >
-                        <span className="mx-1" style={{overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", width: "200px"}}>{process.name}</span>
-                        <span onClick={(e) => {
                             e.stopPropagation();
                             hasChildren && toggleRow(process.id);
                         }}
-                            style={{ cursor: hasChildren ? "pointer" : "default" }}
-                        >
-                            {hasChildren ? (
-                                isExpanded ? (
-                                    <BsChevronUp />
-                                ) : (
-                                    <BsChevronDown />
-                                )
-                            ) : (
-                                <span>&nbsp;&nbsp;</span>
-                            )}
-                        </span>
-                    </td>
-                </tr>
+                        style={{ visibility: hasChildren ? "visible" : "hidden" }}
+                    >
+                        {isExpanded ? <BsChevronDown size={12} /> : <BsChevronRight size={12} />}
+                    </span>
+                    <span className="hierarchy-row-icon">
+                        <BsDiagram3 size={14} />
+                    </span>
+                    <span className="hierarchy-row-name">{process.name}</span>
+                    {isActive && <span className="hierarchy-row-active-dot" title="Currently open" />}
+                </div>
                 {isExpanded && hasChildren
                     &&
                     process.children.map(child => renderRow(child, level + 1))
@@ -147,15 +140,13 @@ export default function Sidebar(props) {
     }, [diagramId]);
     return (
         <div className='hierarchy-sidebar'>
-            <div className="d-flex justify-content-between align-items-center p-2" style={{ backgroundColor: "hsl(225, 10%, 95%)", width: "100%" }}>
-                <span style={{ fontWeight: "600" }}>Hierarchy</span>
-                <BsArrowBarLeft className='sidebar-btn' onClick={handleHidden} />
+            <div className="hierarchy-header">
+                <span>Hierarchy</span>
+                <BsArrowBarLeft className='sidebar-btn' onClick={handleHidden} title="Hide sidebar" />
             </div>
-            <Table style={{ overflow: "auto", width: "100%", height: "20px", tableLayout: "fixed" }}>
-                <tbody style={{ width: "100%" }}>
-                    {processes && processes.map(process => renderRow(process))}
-                </tbody>
-            </Table>
+            <div className="hierarchy-list">
+                {processes && processes.map(process => renderRow(process))}
+            </div>
         </div>
     )
 }

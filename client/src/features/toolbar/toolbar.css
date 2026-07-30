@@ -2,12 +2,12 @@
 .toolbar {
     display: inline-flex;        /* Enable flex layout */
     flex-direction: row;  /* Arrange children in a row */
-    background-color: #F1F2F4; 
-    border: none;
+    background-color: var(--color-surface, #fff);
+    border-bottom: 1px solid var(--color-border, #E3E6EA);
     justify-content: space-between;
     align-items: center;
-    padding: 10px;
-    height: 40px;
+    padding: 10px 14px;
+    height: 44px;
 }
 
 .toolbar-left {
@@ -20,19 +20,19 @@
 }
 
 .toolbar button {
-    width: 35px;
-    height: 35px;
+    width: 34px;
+    height: 34px;
     display: flex;        /* Enable flex layout */
     justify-content: center; /* Center content horizontally */
     align-items: center;  /* Center content vertically */
     background: transparent; /* Transparent background */
     border: none;         /* No border */
-    transition: background-color 0.3s ease; 
-    border-radius: 10px;
+    transition: background-color 0.15s ease;
+    border-radius: var(--radius-sm, 6px);
 }
 
 .toolbar button:hover {
-    background-color: #dadada;
+    background-color: var(--color-hover, #F1F3F5);
 }
 
 .clipboard-button {

@@ -1,28 +1,13 @@
-const sql = require('mssql');
+const { Pool } = require('pg');
 
-const dbConfig = {
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE,
-    server: process.env.DB_SERVER,
-    pool: {
-        max: 10,
-        min: 0,
-        idleTimeoutMillis: 30000
-    },
-    connectionTimeout: 30000,  
-    requestTimeout: 30000,      
-    options: {
-        encrypt: true,
-        trustServerCertificate: false  // if deploy => false
-    }
-};
-
-let pool;
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+});
 
 async function connectDB() {
     try {
-        pool = await sql.connect(dbConfig);
+        await pool.query('SELECT 1');
         console.log('Connected to the SQL Database');
     } catch (err) {
         console.error('Database Error: Unable to connect to the database or create table:', err);
@@ -33,4 +18,4 @@ function getDBConnection() {
     return pool;
 }
 
-module.exports = { connectDB, getDBConnection, sql };
+module.exports = { connectDB, getDBConnection, pool };

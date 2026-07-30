@@ -1,4 +1,4 @@
-const { sql } = require("../config/dbConfig");
+const { pool } = require("../config/dbConfig");
 
 const adminEmails = ['vnapp.pbmn@deheus.com'];
 
@@ -9,36 +9,28 @@ const listProjects = async (req, res) => {
     const isAdmin = adminEmails.includes(userName);
 
     if (isAdmin) {
-      const allProjectsQuery = `
-        SELECT id, name, last_update 
+      const allProjectsResult = await pool.query(`
+        SELECT id, name, last_update
         FROM project;
-      `;
-      const allProjectsResult = await sql.query(allProjectsQuery);
-      return res.json(allProjectsResult.recordset);
+      `);
+      return res.json(allProjectsResult.rows);
     }
 
     // filtering readonly or no access user
-    const request = new sql.Request();
-    request.input('userName', sql.VarChar, userName);
+    const contributionResult = await pool.query(
+      `SELECT project_id FROM diagram_contribution WHERE user_email = $1;`,
+      [userName]
+    );
 
-    const contributionQuery = `
-      SELECT project_id 
-      FROM diagram_contribution 
-      WHERE user_email = @userName;
-    `;
-    const contributionResult = await request.query(contributionQuery);
+    if (contributionResult.rows.length > 0) {
+      const projectIds = contributionResult.rows.map(row => row.project_id);
 
-    if (contributionResult.recordset.length > 0) {
-      const projectIds = contributionResult.recordset.map(row => row.project_id);
+      const projectsResult = await pool.query(
+        `SELECT id, name, last_update FROM project WHERE id = ANY($1::int[]);`,
+        [projectIds]
+      );
 
-      const projectsQuery = `
-        SELECT id, name, last_update 
-        FROM project 
-        WHERE id IN (${projectIds.join(',')});
-      `;
-      const projectsResult = await request.query(projectsQuery);
-
-      res.json(projectsResult.recordset);
+      res.json(projectsResult.rows);
     } else {
       // no project
       res.json([]);
@@ -50,28 +42,16 @@ const listProjects = async (req, res) => {
 };
 
 
-const addProject = (req, res) => {
+const addProject = async (req, res) => {
   const { projectName } = req.body;
   try {
-    sql.query(`
-      IF NOT EXISTS( 
-      SELECT 1 FROM project 
-      WHERE
-      name = ${"'" + projectName + "'"}
-      )
-      BEGIN 
-      INSERT INTO project
-      (name, last_update)
-      VALUES (${"'" + projectName + "'"}, GETDATE())
-      END
-    `)
-      .then((result) => {
-        res.status(200).send("Project created succesfully");
-      })
-      .catch(err => {
-        console.error(err);
-        res.status(500).send("Server error occurred");
-      });
+    await pool.query(
+      `INSERT INTO project (name, last_update)
+       SELECT $1, NOW()
+       WHERE NOT EXISTS (SELECT 1 FROM project WHERE name = $1)`,
+      [projectName]
+    );
+    res.status(200).send("Project created succesfully");
   } catch (err) {
     console.error("Error creating project", err);
     res.status(500).send("Error creating projects");
@@ -80,42 +60,39 @@ const addProject = (req, res) => {
 
 const deleteAllRelatives = async (projectId) => {
   try {
-    const request = new sql.Request();
-    const query = `
-    DELETE dr FROM diagram_relation dr
-    LEFT JOIN diagram d
-    ON dr.parent_diagram_id = d.id
-    WHERE d.project_id = @projectId;
-    DELETE dc FROM diagram_checkout dc
-    INNER JOIN diagram d
-    ON dc.diagram_id = d.id
-    WHERE d.project_id = @projectId;
-    DELETE dd FROM diagram_draft dd
-    INNER JOIN diagram d
-    ON dd.diagram_id = d.id
-    WHERE d.project_id = @projectId;
-    DELETE dp FROM diagram_published dp
-    INNER JOIN diagram d
-    ON dp.diagram_id = d.id
-    WHERE d.project_id = @projectId;
-    DELETE na FROM node_attachment na
-    INNER JOIN diagram d
-    ON na.diagram_id = d.id
-    WHERE d.project_id = @projectId;
-    DELETE al FROM user_activity_log al
-    INNER JOIN diagram d
-    ON al.diagram_id = d.id
-    WHERE d.project_id = @projectId;
-    DELETE FROM diagram_contribution WHERE project_id = @projectId;
-    DELETE FROM diagram WHERE project_id = @projectId
-  `;
-    request.input("projectId", projectId);
-    const result = await request.query(query);
-    if (result.rowsAffected.length > 0) {
-      return true;
-    } else {
-      return false;
-    }
+    await pool.query(`
+      DELETE FROM diagram_relation dr
+      USING diagram d
+      WHERE dr.parent_diagram_id = d.id AND d.project_id = $1;
+    `, [projectId]);
+    await pool.query(`
+      DELETE FROM diagram_checkout dc
+      USING diagram d
+      WHERE dc.diagram_id = d.id AND d.project_id = $1;
+    `, [projectId]);
+    await pool.query(`
+      DELETE FROM diagram_draft dd
+      USING diagram d
+      WHERE dd.diagram_id = d.id AND d.project_id = $1;
+    `, [projectId]);
+    await pool.query(`
+      DELETE FROM diagram_published dp
+      USING diagram d
+      WHERE dp.diagram_id = d.id AND d.project_id = $1;
+    `, [projectId]);
+    await pool.query(`
+      DELETE FROM node_attachment na
+      USING diagram d
+      WHERE na.diagram_id = d.id AND d.project_id = $1;
+    `, [projectId]);
+    await pool.query(`
+      DELETE FROM user_activity_log al
+      USING diagram d
+      WHERE al.diagram_id = d.id AND d.project_id = $1;
+    `, [projectId]);
+    await pool.query(`DELETE FROM diagram_contribution WHERE project_id = $1;`, [projectId]);
+    const result = await pool.query(`DELETE FROM diagram WHERE project_id = $1`, [projectId]);
+    return result.rowCount > 0;
   } catch (err) {
     console.error("Error deleting data: ", err);
   }
@@ -124,30 +101,21 @@ const deleteAllRelatives = async (projectId) => {
 const deleteProject = async (req, res) => {
   const { projectId } = req.body;
   try {
-    const result = await sql.query(`
-      IF NOT EXISTS (
-        SELECT 1 FROM diagram 
-        WHERE project_id = ${projectId}
-      )
-      BEGIN
-        DELETE FROM diagram_contribution 
-        WHERE project_id = ${projectId};
-        DELETE FROM project 
-        WHERE id = ${projectId}
-      END  
-    `);
-    if(result.rowsAffected.length === 0){
-      res.status(200).json({message: "Please remove all diagrams before deleting a project!"});
-    }else{
-      res.status(200).json({message: "Project deleted successfully!", id: projectId});
+    const diagramCheck = await pool.query(
+      `SELECT 1 FROM diagram WHERE project_id = $1 LIMIT 1`,
+      [projectId]
+    );
+
+    if (diagramCheck.rows.length > 0) {
+      return res.status(200).json({ message: "Please remove all diagrams before deleting a project!" });
     }
+
+    await pool.query(`DELETE FROM diagram_contribution WHERE project_id = $1;`, [projectId]);
+    await pool.query(`DELETE FROM project WHERE id = $1`, [projectId]);
+    res.status(200).json({ message: "Project deleted successfully!", id: projectId });
     // const response = await deleteAllRelatives(projectId);
     // if (response) {
-    //   await sql.query(`
-    //     DELETE FROM project 
-    //     WHERE 
-    //     id = ${projectId}
-    //   `);
+    //   await pool.query(`DELETE FROM project WHERE id = $1`, [projectId]);
     //   res.status(200).json({ message: "Project deleted successfully!", id: projectId });
     // }else{
     //   res.status(500).json({ message: "Project deletion failed", id: projectId});

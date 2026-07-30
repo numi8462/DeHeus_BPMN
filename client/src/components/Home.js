@@ -1,4 +1,4 @@
-import { useMsal, useIsAuthenticated, useAccount } from "@azure/msal-react";
+import { useMsal, useIsAuthenticated, useAccount } from "../config/mockAuth";
 import React, { useEffect, useState } from "react";
 import { Button } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";

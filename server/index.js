@@ -1,5 +1,3 @@
-const https = require('https');
-const fs = require('fs');
 const express = require("express");
 require('dotenv').config();
 const { connectDB, getDBConnection } = require('./src/config/dbConfig');
@@ -13,12 +11,6 @@ const diagramController = require('./src/controllers/diagramController');
 const attachmentsController = require('./src/controllers/attachmentsController');
 const adminController = require('./src/controllers/adminController');
 const userController = require('./src/controllers/userController');
-
-const options = {
-    key: fs.readFileSync('/etc/ssl/key.pem'),
-    cert: fs.readFileSync('/etc/ssl/cert.pem'),
-    passphrase: process.env.PASSPHRASE
-};
 
 const app = express();
 const PORT = process.env.PORT;
@@ -74,7 +66,7 @@ app.get('/health', async (req, res) => {
   }
 
   try {
-      const result = await pool.request().query('SELECT 1');
+      const result = await pool.query('SELECT 1');
       if (result) {
           res.status(200).send('Database connected');
       } else {
@@ -86,10 +78,10 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// app.listen(PORT, () => {
-//   console.log(`Server listening on ${PORT}`);
-// });
-
-https.createServer(options, app).listen(PORT, () => {
+if (require.main === module) {
+  app.listen(PORT, () => {
     console.log(`Server listening on ${PORT}`);
   });
+}
+
+module.exports = app;
