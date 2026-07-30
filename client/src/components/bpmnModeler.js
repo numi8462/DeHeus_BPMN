@@ -58,7 +58,7 @@ const LoadingSpinner = () => (
         flexDirection: 'column'
     }}>
         <div className="spinner-border" role="status" style={{ width: '3rem', height: '3rem' }}>
-            <span className="sr-only">Loading...</span>
+            <span className="visually-hidden">Loading...</span>
         </div>
         <p style={{ marginTop: '1rem' }}>Loading BPMN Editor...</p>
     </div>
