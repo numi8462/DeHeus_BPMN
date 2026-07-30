@@ -2,7 +2,8 @@ const whitelist = [
   'http://localhost:3001', 'http://server:3001',
   'http://localhost:3000', 'http://client:3000',
   'http://localhost:8080', 'http://client:8080', 'http://client',
-  'https://vn-app-sa-bpmn-stapp-p-01.azurewebsites.net', 
+  'https://vn-app-sa-bpmn-stapp-p-01.azurewebsites.net',
+  'https://de-heus-bpmn-vyph-one.vercel.app',
 ];
 
 const corsOptions = {
