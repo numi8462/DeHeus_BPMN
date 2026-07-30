@@ -14,130 +14,139 @@ https://legend-waste-c00.notion.site/143d39f0dbf380fcb695fea7c6fa10e6
   - Seungmin Lee
   - YoungHo Kim
 
-### Tech Stack
-- Frontend: React, BPMN.js, JavaScript
-- Backend: Node.js, Express.js, Azure SQL Database
-- Authentication: Microsoft SSO, Azure Active Directory
-- Deployment: Docker, Azure
+---
+
+## Current Status (restoration notes)
+
+This repo was originally built for **Azure** (Azure SQL Database, Docker, Azure Kubernetes Service, Microsoft SSO via Azure AD). It was later revived/restored for a temporary deployment, and the following were changed to make that possible:
+
+- **Database**: Azure SQL → **PostgreSQL on Supabase**. All controller queries were ported from T-SQL (`mssql`) to Postgres (`pg`). See [Database Setup](#4-database-setup) below.
+- **Hosting**: Docker/AKS → **Vercel** (two separate Vercel projects, one for `client/`, one for `server/`). The old `Dockerfile`, `backend-deployment.yaml`, `loadbalancer-service.yaml`, and `nginx.conf` files are still in the repo for reference but are **not used** by the current deployment.
+- **HTTPS**: The server no longer terminates TLS itself (it used to read `cert.pem`/`key.pem`). Vercel handles HTTPS for both the frontend and backend automatically.
+- **Login**: Real Microsoft SSO (Azure AD / MSAL) requires an Azure AD app registration, which wasn't available during this restoration. A **temporary mock-auth bypass** was added instead — see [Authentication](#3-authentication) below. This must be switched off before handing real user logins to anyone.
+
+If this project moves to a permanent home, the two things most worth revisiting are: (1) whether to keep Supabase/Vercel or move back to Azure, and (2) wiring up a real Azure AD app registration to replace the mock-auth bypass.
 
 ---
 
-## 1. Main Project Structure
+## 1. Tech Stack
+- **Frontend**: React, BPMN.js, JavaScript
+- **Backend**: Node.js, Express.js, PostgreSQL (Supabase)
+- **Authentication**: Microsoft SSO / Azure Active Directory (MSAL) — currently bypassed with a mock-auth layer for this deployment, see below
+- **Deployment**: Vercel (frontend and backend as separate projects)
+
+---
+
+## 2. Main Project Structure
 #### `./client/`: Main code directory for frontend
-	- `src/`: main source code directory
-		- `components/`: project pages and modals
-			- `common/`: authentication and modals
-			- `Admin.js`: admin page
-			- `ErrorPage.js`: error page
-			- `Home.js`: homepage
-			- `ListSingleProject.js`: process list page
-			- `Main.js`: project list page
-			- `MyPage.js`: user`s my page
-			- `bpmnModeler.js`: bpmn modeler file for diagrams
-		- `config/:` for authentication
-		- `features/`: features for bpmn modeler
-			- `palette/`: custom palette from bpmn.js node module
-			- `popup/`: custom popup from bpmn.js node module
-			- `replace/`: custom replace from bpmn.js node module
-			- `search/`: custom search from bpmn.js node module
-			- `sidebar/`: sidebar for process heirarchy
-			- `subprocess/`: custom subprocess from bpmn.js node module
-			- `toolbar/`: toolbar for modeler
-				- `toolbar.js`: handles basic modeler and user functions including checkout, publish, view contributor, and etc.
-		- `providers/`: extensions for the BPMN properties panel. Further implementation guides on custom elements and properties can be found at 'https://github.com/bpmn-io/bpmn-js-examples/tree/main'
-			- `descriptor/`: moddle descriptors for custom BPMN elements
-			- `props/`: property entries for custom BPMN elements
-			- `AttachmentPropertiesProvider.js`: provider for displaying custom attachment property
-			- `DropdownProvider.js`: provider for displaying custom dropdown property
-			- `ParameterProvider.js`: provider for displaying custom parameter(extension) property
-			- `index.js`: for initiating providers into modeler
-		- `readOnlyProviders/`: extensions for the BPMN properties panel for readOnly user
-		- `resources/`: Contains and manages svgs for toolbar
-		- `styles/`: Contains CSS for application
-		- `utils/`: Contains files for exporting and managing local status 
-		- `App.js`: Handles routes for pages
-		- `index.css`: CSS for application
-	- `.dockerignore`: Specifies files and directories that should be ignored when building a Docker image for the backend. This typically includes files that aren’t needed in the final Docker container, such as `node_modules/`
-	- `nginx.conf`: Configuration file for the NGINX web server in deployment, which is often used as a reverse proxy to serve static files, manage load balancing, and handle routing between frontend and backend services
-#### `./server/`: Main code directory for the backend. Contains all the core backend logic, configuration, and deployment files.
-	- `src/`: Main source code directory
-		- `config/`: Configuration files for the backend server, such as database connections and CORS settings
-		- `corsOptions.js`: Configuration for Cross-Origin Resource Sharing (CORS)
-		- `dbConfig.js`: Database configuration, such as connection details (host, user, password, database name)
-	- `controllers/`: Contains the logic for handling different API requests
-		- `adminController.js`: Handles API requests related to admin-level operations
-		- `attachmentsController.js`: Manages API requests related to file attachments on the modeler
-		- `authController.js`: Handles authentication-related tasks, including user authentication, token generation, and validation
-		- `diagramController.js`: Manages operations for handling diagrams on the modeler
-		- `processesController.js`: Handles operations related to business processes in projects
-		- `projectsController.js`: Manages the logic for project-specific details
-		- `userController.js`: Handles operations related to users, including retrieving user details, updating profiles, and managing user permissions	
-	- `.dockerignore`: Specifies files and directories that should be ignored when building a Docker image for the backend. This typically includes files that aren’t needed in the final Docker container, such as `node_modules/`
-	- `backend-deployment.yaml`: Kubernetes configuration file used to define the deployment of the backend service on a Kubernetes cluster
-	- `loadbalancer-service.yaml`: Kubernetes configuration file for creating a LoadBalancer service to allows external traffic
-	- `cert.pem`: The SSL/TLS certificate used to encrypt communications for HTTPS
-	- `key.pem`: The private key used to securely authenticate the SSL/TLS certificate
+- `src/`: main source code directory
+	- `components/`: project pages and modals
+		- `common/`: shared nav/modal components (`TopBar.js`, `LeftNavBar.js`, `Loading.js`, etc.)
+		- `Admin.js`: admin page
+		- `ErrorPage.js`: error page
+		- `Home.js`: homepage / login entry point
+		- `ListSingleProject.js`: process list page
+		- `Main.js`: project list page
+		- `MyPage.js`: user's my page
+		- `bpmnModeler.js`: bpmn modeler file for diagrams
+	- `config/`: authentication config
+		- `authConfig.js`: real MSAL/Azure AD config (`msalInstance`, `loginRequest`)
+		- `mockAuth.js`: **temporary bypass** — re-exports either the real `@azure/msal-react` hooks or a fake always-authenticated mock user, controlled by `REACT_APP_MOCK_AUTH`. Every component that needs `useIsAuthenticated`/`useMsal`/`useAccount`/`MsalProvider` imports them from here instead of `@azure/msal-react` directly.
+	- `features/`: features for bpmn modeler
+		- `palette/`: custom palette from bpmn.js node module
+		- `popup/`: custom popup from bpmn.js node module
+		- `replace/`: custom replace from bpmn.js node module
+		- `search/`: custom search from bpmn.js node module
+		- `sidebar/`: hierarchy sidebar shown inside the modeler
+		- `subprocess/`: drilldown behavior for navigating into sub-diagrams
+		- `toolbar/`: toolbar for modeler
+			- `toolbar.js`: save, import/export, zoom, undo/redo, align/distribute, checkout, publish, contributors, etc.
+	- `providers/`: extensions for the BPMN properties panel. Further implementation guides on custom elements and properties can be found at 'https://github.com/bpmn-io/bpmn-js-examples/tree/main'
+		- `descriptor/`: moddle descriptors for custom BPMN elements
+		- `props/`: property entries for custom BPMN elements
+		- `AttachmentPropertiesProvider.js`: provider for displaying custom attachment property
+		- `DropdownProvider.js`: provider for displaying custom dropdown property
+		- `ParameterProvider.js`: provider for displaying custom parameter(extension) property
+		- `index.js`: for initiating providers into modeler
+	- `readOnlyProviders/`: extensions for the BPMN properties panel for readOnly user
+	- `resources/`: Contains and manages svgs for toolbar
+	- `styles/`: Contains CSS for application
+	- `utils/`: Contains files for exporting and managing local status
+	- `App.js`: Handles routes for pages
+	- `index.css`: CSS for application (also holds the design tokens / shared component styles: sidebar, process lists, app shell)
+- `vercel.json`: tells Vercel this is a Create React App build (SPA rewrites so client-side routes don't 404 on refresh)
+- `Dockerfile`, `nginx.conf`: legacy, unused by the current Vercel deployment
 
+#### `./server/`: Main code directory for the backend.
+- `src/`
+	- `config/`
+		- `corsOptions.js`: CORS whitelist — **must include the deployed frontend's URL**
+		- `dbConfig.js`: Postgres connection pool (`pg`), reads `DATABASE_URL`
+	- `controllers/`: request handlers
+		- `adminController.js`: admin-level operations (user management, role assignment)
+		- `attachmentsController.js`: file attachments on the modeler (stored as `bytea` in Postgres, not on disk)
+		- `authController.js`: decodes the MSAL token and checks the `user` table
+		- `diagramController.js`: diagram CRUD, checkout/publish/drilldown logic
+		- `processesController.js`: business process listing per project
+		- `projectsController.js`: project-level operations
+		- `userController.js`: checkout/cancel-checkout, "My Page" data
+- `index.js`: Express app. Exports the app for Vercel's serverless runtime; only calls `app.listen()` when run directly (`node index.js`) for local dev.
+- `schema.sql`: **run this once in the Supabase SQL editor** before starting the server — see [Database Setup](#4-database-setup)
+- `vercel.json`: tells Vercel to build `index.js` with `@vercel/node` and route all requests to it
+- `Dockerfile`, `backend-deployment.yaml`, `loadbalancer-service.yaml`: legacy Azure/Kubernetes deployment files, unused by the current Vercel deployment
 
+---
 
-## 2. Environment Variables
-To run this project, you will need to add the following environment variables to your `.env` file:
+## 3. Authentication
 
-### 1. Frontend Environment Variables
-For local development and Azure deployment, the following variables must be set:
-- `/client/.env`: 
-	- **REACT_APP_FRONTEND_URL**: The URL of the deployed frontend on Azure App Service (AAS).
-	- **REACT_APP_API_URL**: The URL of the deployed backend API hosted on Azure Kubernetes Service (AKS).
-	- **REACT_APP_AZURE_CLIENT_ID**: The Azure Active Directory (AAD) client ID used for authentication.
-	- **REACT_APP_AZURE_TENANT_ID**: The Azure AAD tenant ID associated with your application.
+The app is built around Microsoft SSO (MSAL + Azure AD). For this restoration, no Azure AD app registration was available, so a **mock-auth bypass** was added purely for local development / demoing:
 
-### 2. Server Environment Variables
-- `/server/.env`: 
-	- **PORT**: The port on which the server will run (e.g. `3001`).
-	- **DATABASE_URL**: Postgres connection string for Supabase (use the pooler/"Transaction" connection string from the Supabase dashboard, not the direct connection, since it's needed for serverless deployments).
+- Set `REACT_APP_MOCK_AUTH=true` and `REACT_APP_MOCK_EMAIL=<some email>` in `client/.env` (or in Vercel's env vars).
+- `client/src/config/mockAuth.js` then fakes an always-logged-in MSAL session for that email, including a syntactically-valid (but unsigned) JWT — this works because `authController.authenticateUser` only `jwt.decode()`s the token without verifying its signature (a pre-existing, not-fixed-in-this-restoration characteristic of the original code).
+- The mock user must already exist as a row in the `"user"` table (matched by email) for `/api/authenticate` to accept it.
+- **Emails containing `.pbmn@`** are treated as admin/super-user throughout the backend (hardcoded in `projectsController.js`'s `adminEmails` and various `.includes('.pbmn@')` checks) and were also given full diagram-editing rights directly (bypassing the normal checkout workflow) for this restoration, so a single test account could exercise every feature. Real non-admin users still go through the normal editor/checkout/publish flow.
 
-Ensure these values are set correctly in the Azure environment or on your local machine for development.
+**To switch to real Microsoft SSO:** register an app in Azure AD (Entra ID), set `REACT_APP_AZURE_CLIENT_ID` / `REACT_APP_AZURE_TENANT_ID` in `client/.env`, and set `REACT_APP_MOCK_AUTH=false` (or remove it). No code changes should be needed — `mockAuth.js` falls back to the real `@azure/msal-react` hooks automatically when the flag is off.
 
+---
 
+## 4. Database Setup
 
-## 3. Deployment
+The repo had no schema/migration files — `server/schema.sql` was written from scratch by reverse-engineering the queries in `server/src/controllers/*.js`.
 
-### 1. Deployment Platform
-This project is deployed on **Azure App Service (AAS)** and **Azure Kubernetes (AKS)** using **Azure Container**.
+1. Create a [Supabase](https://supabase.com) project.
+2. Open the SQL Editor and run the contents of `server/schema.sql` once. (You'll be warned about Row Level Security — safe to skip; the server connects directly via a Postgres connection string, not through Supabase's REST API/anon key, so RLS doesn't apply to this access path.)
+3. From the Supabase dashboard, copy the **Connection Pooling ("Transaction" mode)** connection string — not the direct connection — since serverless deployments need pooled connections. Use this as `DATABASE_URL`.
 
-### 2. Steps to Deploy (Frontend & Backend)
+---
 
-You don't need to run `npm run build` manually since the Dockerfile already handles the build process. Tthe Docker image itself will include the necessary build steps.
+## 5. Environment Variables
 
-1. Log in to Azure Container Registry (ACR) and build the Docker image:
-    ```bash
-    az acr login --name vnacrsabpmnregp01
-    docker build -t vnacrsabpmnregp01.azurecr.io/frontend:latest .
-    docker push vnacrsabpmnregp01.azurecr.io/frontend:latest
-    ```
+### Frontend — `client/.env`
+- **REACT_APP_API_URL**: URL of the deployed backend (no trailing slash).
+- **REACT_APP_FRONTEND_URL**: URL of the deployed frontend itself.
+- **REACT_APP_AZURE_CLIENT_ID** / **REACT_APP_AZURE_TENANT_ID**: Azure AD app registration details, only needed once real SSO replaces the mock bypass.
+- **REACT_APP_MOCK_AUTH** / **REACT_APP_MOCK_EMAIL**: temporary bypass, see [Authentication](#3-authentication).
 
-2. For the backend, the same process applies:
-    ```bash
-    docker build -t vnacrsabpmnregp01.azurecr.io/backend:latest .
-    docker push vnacrsabpmnregp01.azurecr.io/backend:latest
-    ```
+### Backend — `server/.env`
+- **PORT**: port for local dev (e.g. `3001`). Not used by Vercel's serverless runtime, only by `node index.js` locally.
+- **DATABASE_URL**: Supabase Postgres pooler connection string, see [Database Setup](#4-database-setup).
 
-3. Deploy the backend to Azure Kubernetes Service (AKS):
-    ```bash
-    kubectl apply -f backend-deployment.yaml
-    kubectl apply -f loadbalancer-service.yaml
-    kubectl rollout restart deployment backend-deployment --namespace default
-    ```
+---
 
-We already set up a CI/CD pipeline in **Azure App Service (AAS)**, so you only need to push the Docker images to **Azure Container Registry (ACR)**, and the deployment will happen automatically. But you need to reatart the **Azure Kubernetes (AKS)** after you push the new Docker images. And also, ensure that the environment variables (both frontend and backend) are properly configured in Azure.
+## 6. Deployment (Vercel)
 
+The frontend and backend are deployed as **two separate Vercel projects** pointing at the same GitHub repo, with different Root Directories:
 
-## 3. Notes
-As we mentioned on Teams channel and bi-weekly meeting, there are several things to notice:
-### 1. Azure Automation
-Azure Automation Account is still needed to complete the checkout function. Without this, the 'automatically checkout in 14 days' feature is not available.
-### 2. SSL Certificate
-For further HTTPS support, you have three options:
-1. **Company-issued SSL Certificate**: Place the SSL certificate files (`cert.pem` and `key.pem`) in the relevant directory for secure communication.
-2. **Azure Application Gateway**: If security policies prevent placing certificate files in the server directory, you can set up Azure Application Gateway to manage SSL certificates securely.
-3. **Azure Front Door**: Alternatively, use Azure Front Door, which handles SSL termination for you, meaning no need to manage SSL certificate files locally.
+1. **Backend project** — Root Directory: `server`. Framework preset: "Other" (it uses `server/vercel.json`'s `builds`/`routes` directly). Add `DATABASE_URL` as an environment variable, then deploy.
+2. **Frontend project** — Root Directory: `client`. Framework preset: Create React App. Add the frontend env vars listed above (`REACT_APP_API_URL` pointing at the backend project's URL from step 1). Also add `CI=false` — Vercel sets `CI=true` by default, and Create React App treats ESLint warnings as build-breaking errors under `CI=true`; this repo has a number of pre-existing lint warnings that are otherwise harmless.
+3. After both are deployed, add the frontend's real URL to the `whitelist` array in `server/src/config/corsOptions.js` and redeploy the backend, and double-check `REACT_APP_API_URL`/`REACT_APP_FRONTEND_URL` on the frontend match the real deployed URLs (redeploy again if you changed them).
+
+Pushing to `main` triggers Vercel to redeploy both projects automatically.
+
+---
+
+## 7. Notes
+
+- **Checkout expiry**: `diagram_checkout` rows get a 14-day `expiry_time`. Expiry is only checked *passively* when reading (e.g. "is this draft still valid for this user") — nothing actively cancels/cleans up expired checkouts in the background. The original Azure-based plan was to run this cleanup via an Azure Automation Account; there is no equivalent scheduled job set up in the current Vercel deployment.
+- **Known pre-existing rough edges** (not blocking, not fixed in this restoration): a handful of dead dependencies (`mysql2`, `canvg`, `pdfmake`, `express-session`, `passport`, `passport-azure-ad` in `server/package.json`; `BsThreeDots`, `NoAuth` unused imports in a couple of client files), and some raw string-built SQL in older corners of the codebase that weren't touched during the DB migration.
